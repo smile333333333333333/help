@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cabin Lockdown</title>
+
+<style>
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#080808;
+}
+
+body{
+    font-family:monospace;
+    color:white;
+}
+
+canvas{
+    display:block;
+    width:100%;
+    height:100%;
+    background:#111;
+    touch-action:none;
+}
+
+#modeScreen{
+    position:fixed;
+    inset:0;
+    background:#090909;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    z-index:10;
+}
+
+#modeScreen h1{
+    font-size:42px;
+    margin:0 0 10px;
+}
+
+#modeScreen p{
+    color:#aaa;
+    margin-bottom:25px;
+}
+
+.modes{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    justify-content:center;
+    max-width:700px;
+}
+
+.mode{
+    width:190px;
+    min-height:100px;
+    background:#151515;
+    color:#ddd;
+    border:1px solid #555;
+    font-family:monospace;
+    cursor:pointer;
+    padding:12px;
+}
+
+.mode:hover{
+    background:#252525;
+    border-color:#aaa;
+}
+
+.mode b{
+    display:block;
+    font-size:17px;
+    margin-bottom:8px;
+}
+
+#help{
+    position:fixed;
+    bottom:8px;
+    left:50%;
+    transform:translateX(-50%);
+    color:#888;
+    font-size:12px;
+    pointer-events:none;
+}
+
+#message{
+    position:fixed;
+    left:50%;
+    top:15%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.9);
+    border:1px solid #777;
+    padding:15px 25px;
+    max-width:600px;
+    text-align:center;
+    display:none;
+    z-index:5;
+}
+
+#inventory{
+    position:fixed;
+    top:12px;
+    right:15px;
+    color:#aaa;
+    font-size:13px;
+    pointer-events:none;
+}
+
+#death{
+    position:fixed;
+    inset:0;
+    background:#000;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    z-index:30;
+}
+
+#death h1{
+    font-size:40px;
+}
+
+#death button{
+    padding:12px 25px;
+    background:#111;
+    border:1px solid #777;
+    color:white;
+    font-family:monospace;
+}
+</style>
+</head>
+
+<body>
+
+<div id="modeScreen">
+    <h1>CABIN LOCKDOWN</h1>
+    <p>Choose what is hunting you.</p>
+
+    <div class="modes">
+
+        <button class="mode" onclick="startGame('slasher')">
+            <b>🔪 SLASHER</b>
+            A relentless masked pursuer.
+        </button>
+
+        <button class="mode" onclick="startGame('stalker')">
+            <b>👤 STALKER</b>
+            Quiet, patient, and difficult to track.
+        </button>
+
+        <button class="mode" onclick="startGame('creature')">
+            <b>🦴 CREATURE</b>
+            Something unnatural is hunting the cabin.
+        </button>
+
+        <button class="mode" onclick="startGame('body')">
+            <b>🫀 BODY HORROR</b>
+            A disturbing creature whose appearance keeps changing.
+        </button>
+
+        <button class="mode" onclick="startGame('supernatural')">
+            <b>👻 SUPERNATURAL</b>
+            The cabin itself seems to be helping the pursuer.
+        </button>
+
+        <button class="mode" onclick="startGame('survival')">
+            <b>🌲 SURVIVAL</b>
+            A harder mix of several threats.
+        </button>
+
+    </div>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="help">
+    WASD / ARROWS = MOVE &nbsp;&nbsp; E = INTERACT &nbsp;&nbsp; SHIFT = SPRINT
+</div>
+
+<div id="message"></div>
+
+<div id="inventory">
+    ITEMS: <span id="items">0</span>/6
+</div>
+
+<div id="death">
+    <h1>CAUGHT</h1>
+    <p>The cabin goes quiet.</p>
+    <button onclick="location.reload()">TRY AGAIN</button>
+</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+canvas.width=1000;
+canvas.height=600;
+
+const keys={};
+
+document.addEventListener("keydown",e=>{
+    keys[e.key.toLowerCase()]=true;
+
+    if(e.key.toLowerCase()==="e"){
+        interact();
+    }
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()]=false;
+});
+
+
+/* =========================
+   GAME
+========================= */
+
+let running=false;
+let mode="slasher";
+
+let room=0;
+let collected=0;
+
+let messageTimer=0;
+
+let doorState={};
+
+let hiding=false;
+
+let escapeReady=false;
+
+let threat={
+    x:850,
+    y:300,
+    speed:0.7,
+    active:false
+};
+
+const player={
+    x:150,
+    y:300,
+    r:10,
+    speed:2.5
+};
+
+
+/* =========================
+   ROOMS
+========================= */
+
+const rooms=[
+
+{
+    name:"LIVING ROOM",
+
+    furniture:[
+        {x:150,y:120,w:230,h:80,n:"SOFA"},
+        {x:160,y:330,w:150,h:80,n:"TABLE"},
+        {x:500,y:100,w:90,h:160,n:"BOOKCASE"},
+        {x:700,y:350,w:170,h:80,n:"CABINET"}
+    ],
+
+    doors:[
+        {x:950,y:240,name:"KITCHEN",to:1},
+        {x:50,y:240,name:"PORCH",to:4}
+    ],
+
+    items:[
+        {x:550,y:320,n:"BASEMENT KEY",id:"basement"}
+    ],
+
+    hiding:[
+        {x:500,y:300,w:90,h:50,n:"CLOSET"}
+    ]
+},
+
+{
+    name:"KITCHEN",
+
+    furniture:[
+        {x:120,y:100,w:220,h:70,n:"COUNTER"},
+        {x:120,y:300,w:100,h:160,n:"FRIDGE"},
+        {x:450,y:100,w:250,h:70,n:"TABLE"},
+        {x:750,y:100,w:100,h:150,n:"CABINET"}
+    ],
+
+    doors:[
+        {x:50,y:240,name:"LIVING ROOM",to:0},
+        {x:950,y:240,name:"BEDROOM",to:2}
+    ],
+
+    items:[
+        {x:780,y:300,n:"FLASHLIGHT",id:"flashlight"}
+    ],
+
+    hiding:[
+        {x:110,y:190,w:100,h:70,n:"PANTRY"}
+    ]
+},
+
+{
+    name:"BEDROOM",
+
+    furniture:[
+        {x:150,y:100,w:250,h:100,n:"BED"},
+        {x:600,y:100,w:100,h:180,n:"WARDROBE"},
+        {x:400,y:370,w:220,h:70,n:"DESK"}
+    ],
+
+    doors:[
+        {x:50,y:240,name:"KITCHEN",to:1},
+        {x:950,y:240,name:"BATHROOM",to:3}
+    ],
+
+    items:[
+        {x:700,y:350,n:"CAR KEYS",id:"keys"}
+    ],
+
+    hiding:[
+        {x:700,y:290,w:100,h:80,n:"WARDROBE"}
+    ]
+},
+
+{
+    name:"BATHROOM",
+
+    furniture:[
+        {x:100,y:100,w:180,h:80,n:"SINK"},
+        {x:500,y:100,w:120,h:100,n:"TUB"},
+        {x:750,y:100,w:100,h:180,n:"CABINET"}
+    ],
+
+    doors:[
+        {x:50,y:240,name:"BEDROOM",to:2},
+        {x:950,y:240,name:"HALL",to:5}
+    ],
+
+    items:[
+        {x:300,y:350,n:"FUSE",id:"fuse"}
+    ],
+
+    hiding:[
+        {x:700,y:300,w:100,h:100,n:"CLOSET"}
+    ]
+},
+
+{
+    name:"BACK PORCH",
+
+    furniture:[
+        {x:200,y:100,w:170,h:70,n:"BENCH"},
+        {x:600,y:350,w:180,h:70,n:"WOOD PILE"}
+    ],
+
+    doors:[
+        {x:950,y:240,name:"LIVING ROOM",to:0},
+        {x:500,y:50,name:"WOODS",to:6}
+    ],
+
+    items:[
+        {x:650,y:250,n:"BOLT CUTTERS",id:"cutters"}
+    ],
+
+    hiding:[]
+},
+
+{
+    name:"HALL",
+
+    furniture:[
+        {x:250,y:100,w:100,h:180,n:"SHELF"},
+        {x:600,y:300,w:180,h:70,n:"TABLE"}
+    ],
+
+    doors:[
+        {x:50,y:240,name:"BATHROOM",to:3},
+        {x:950,y:240,name:"BASEMENT",to:7}
+    ],
+
+    items:[],
+
+    hiding:[]
+},
+
+{
+    name:"WOODS",
+
+    furniture:[
+        {x:100,y:100,w:90,h:90,n:"TREE"},
+        {x:350,y:350,w:100,h:100,n:"TREE"},
+        {x:700,y:100,w:90,h:90,n:"TREE"},
+        {x:800,y:400,w:100,h:100,n:"TREE"}
+    ],
+
+    doors:[
+        {x:500,y:550,name:"BACK PORCH",to:4},
+        {x:950,y:240,name:"GARAGE",to:8}
+    ],
+
+    items:[
+        {x:600,y:350,n:"GAS CAN",id:"gas"}
+    ],
+
+    hiding:[]
+},
+
+{
+    name:"BASEMENT",
+
+    furniture:[
+        {x:100,y:100,w:160,h:80,n:"WORKBENCH"},
+        {x:400,y:100,w:100,h:200,n:"SHELVES"},
+        {x:700,y:350,w:150,h:80,n:"GENERATOR"}
+    ],
+
+    doors:[
+        {x:50,y:240,name:"HALL",to:5}
+    ],
+
+    items:[
+        {x:700,y:250,n:"GENERATOR PART",id:"generator"}
+    ],
+
+    hiding:[]
+},
+
+{
+    name:"GARAGE",
+
+    furniture:[
+        {x:150,y:100,w:220,h:80,n:"WORKBENCH"},
+        {x:600,y:100,w:200,h:100,n:"CAR"},
+        {x:300,y:350,w:100,h:100,n:"TOOLS"}
+    ],
+
+    doors:[
+        {x:50,y:240,name:"WOODS",to:6}
+    ],
+
+    items:[],
+
+    hiding:[]
+}
+
+];
+
+
+/* =========================
+   INVENTORY
+========================= */
+
+const inventory=[];
+
+function hasItem(id){
+    return inventory.includes(id);
+}
+
+function addItem(id,name){
+
+    if(!hasItem(id)){
+
+        inventory.push(id);
+
+        collected++;
+
+        document.getElementById("items").textContent=collected;
+
+        showMessage("FOUND: "+name,3);
+
+    }
+
+}
+
+
+/* =========================
+   MESSAGE
+========================= */
+
+function showMessage(text,time=3){
+
+    const el=document.getElementById("message");
+
+    el.textContent=text;
+    el.style.display="block";
+
+    messageTimer=time*60;
+
+}
+
+
+/* =========================
+   START
+========================= */
+
+function startGame(selected){
+
+    mode=selected;
+
+    document.getElementById("modeScreen").style.display="none";
+
+    running=true;
+
+    threat.active=true;
+
+    if(mode==="slasher"){
+        threat.speed=0.72;
+    }
+
+    if(mode==="stalker"){
+        threat.speed=0.52;
+    }
+
+    if(mode==="creature"){
+        threat.speed=0.9;
+    }
+
+    if(mode==="body"){
+        threat.speed=0.78;
+    }
+
+    if(mode==="supernatural"){
+        threat.speed=0.65;
+    }
+
+    if(mode==="survival"){
+        threat.speed=1;
+    }
+
+    showMessage(
+        "Find the six escape items.\nThe cabin is not safe.",
+        5
+    );
+
+}
+
+
+/* =========================
+   COLLISION
+========================= */
+
+function blocked(x,y){
+
+    if(x<35 || x>965 || y<55 || y>565){
+
+        /*
+        allow door openings
+        */
+
+        if(x<35 || x>965){
+
+            for(const d of rooms[room].doors){
+
+                if(
+                    Math.abs(y-(d.y+60))<80
+                ){
+                    return false;
+                }
+
+            }
+
+        }
+
+        if(room===4 && y<55 && x>430 && x<570){
+            return false;
+        }
+
+        return true;
+    }
+
+
+    for(const f of rooms[room].furniture){
+
+        if(
+            x>f.x-12 &&
+            x<f.x+f.w+12 &&
+            y>f.y-12 &&
+            y<f.y+f.h+12
+        ){
+            return true;
+        }
+
+    }
+
+    return false;
+}
+
+
+/* =========================
+   ROOM TRANSITION
+========================= */
+
+function changeRoom(to,side){
+
+    room=to;
+
+    if(side==="right"){
+        player.x=70;
+    }else if(side==="left"){
+        player.x=930;
+    }else{
+        player.x=500;
+        player.y=520;
+    }
+
+    player.y=300;
+
+    showMessage(
+        rooms[room].name,
+        1.5
+    );
+
+}
+
+
+/* =========================
+   UPDATE
+========================= */
+
+function update(){
+
+    if(!running || hiding) return;
+
+    let dx=0;
+    let dy=0;
+
+    if(keys["w"]||keys["arrowup"]) dy--;
+    if(keys["s"]||keys["arrowdown"]) dy++;
+    if(keys["a"]||keys["arrowleft"]) dx--;
+    if(keys["d"]||keys["arrowright"]) dx++;
+
+    if(dx&&dy){
+
+        dx*=0.707;
+        dy*=0.707;
+
+    }
+
+    let speed=player.speed;
+
+    if(keys["shift"]){
+        speed=4.2;
+    }
+
+    const nx=player.x+dx*speed;
+    const ny=player.y+dy*speed;
+
+    if(!blocked(nx,player.y)){
+        player.x=nx;
+    }
+
+    if(!blocked(player.x,ny)){
+        player.y=ny;
+    }
+
+
+    /* doors */
+
+    if(player.x>975){
+
+        for(const d of rooms[room].doors){
+
+            if(
+                d.x>900 &&
+                Math.abs(player.y-(d.y+60))<85
+            ){
+
+                if(isDoorLocked(room,d)){
+
+                    showMessage(
+                        "The door is locked.",
+                        2
+                    );
+
+                    player.x=955;
+
+                }else{
+
+                    changeRoom(d.to,"right");
+
+                }
+
+                break;
+
+            }
+
+        }
+
+    }
+
+
+    if(player.x<25){
+
+        for(const d of rooms[room].doors){
+
+            if(
+                d.x<100 &&
+                Math.abs(player.y-(d.y+60))<85
+            ){
+
+                if(isDoorLocked(room,d)){
+
+                    showMessage(
+                        "The door is locked.",
+                        2
+                    );
+
+                    player.x=45;
+
+                }else{
+
+                    changeRoom(d.to,"left");
+
+                }
+
+                break;
+
+            }
+
+        }
+
+    }
+
+
+    /* threat */
+
+    if(threat.active){
+
+        moveThreat();
+
+    }
+
+
+    if(messageTimer>0){
+
+        messageTimer--;
+
+        if(messageTimer<=0){
+
+            document.getElementById("message")
+                .style.display="none";
+
+        }
+
+    }
+
+}
+
+
+/* =========================
+   DOORS
+========================= */
+
+function doorKey(roomId,d){
+
+    return roomId+"_"+d.to;
+}
+
+function isDoorLocked(roomId,d){
+
+    return doorState[doorKey(roomId,d)]===true;
+
+}
+
+
+/* =========================
+   INTERACTION
+========================= */
+
+function interact(){
+
+    if(!running || hiding) return;
+
+
+    /* items */
+
+    for(let i=rooms[room].items.length-1;i>=0;i--){
+
+        const item=rooms[room].items[i];
+
+        const d=Math.hypot(
+            player.x-item.x,
+            player.y-item.y
+        );
+
+        if(d<65){
+
+            addItem(item.id,item.n);
+
+            rooms[room].items.splice(i,1);
+
+            return;
+
+        }
+
+    }
+
+
+    /* doors */
+
+    for(const d of rooms[room].doors){
+
+        const cx=d.x+50;
+        const cy=d.y+60;
+
+        const distance=Math.hypot(
+            player.x-cx,
+            player.y-cy
+        );
+
+        if(distance<100){
+
+            const key=doorKey(room,d);
+
+            if(doorState[key]){
+
+                doorState[key]=false;
+
+                showMessage(
+                    "DOOR UNLOCKED",
+                    2
+                );
+
+            }else{
+
+                doorState[key]=true;
+
+                showMessage(
+                    "DOOR LOCKED",
+                    2
+                );
+
+            }
+
+            return;
+
+        }
+
+    }
+
+
+    /* hiding */
+
+    for(const h of rooms[room].hiding){
+
+        if(
+            player.x>h.x-50 &&
+            player.x<h.x+h.w+50 &&
+            player.y>h.y-50 &&
+            player.y<h.y+h.h+50
+        ){
+
+            hiding=true;
+
+            showMessage(
+                "HIDDEN — press E to leave",
+                3
+            );
+
+            return;
+
+        }
+
+    }
+
+
+    /* special rooms */
+
+    if(room===8){
+
+        if(
+            player.x>550 &&
+            player.x<850 &&
+            player.y>70 &&
+            player.y<250
+        ){
+
+            tryEscape();
+
+            return;
+
+        }
+
+    }
+
+
+    showMessage(
+        "Nothing useful here.",
+        2
+    );
+
+}
+
+
+/* =========================
+   ESCAPE
+========================= */
+
+function tryEscape(){
+
+    if(
+        hasItem("keys") &&
+        hasItem("gas") &&
+        hasItem("generator") &&
+        hasItem("fuse") &&
+        hasItem("cutters") &&
+        hasItem("basement")
+    ){
+
+        escapeReady=true;
+
+        running=false;
+
+        showMessage(
+            "THE CAR STARTS.\n\nYOU ESCAPED.",
+            999
+        );
+
+    }else{
+
+        showMessage(
+            "The car needs:\n"+
+            "keys, fuel, generator part,\n"+
+            "fuse, bolt cutters and basement key.",
+            5
+        );
+
+    }
+
+}
+
+
+/* =========================
+   THREAT
+========================= */
+
+function moveThreat(){
+
+    /*
+    Different genres have
+    different behavior.
+    */
+
+    let tx=player.x;
+    let ty=player.y;
+
+    if(mode==="stalker"){
+
+        /*
+        The stalker moves slowly and
+        occasionally changes direction.
+        */
+
+        if(Math.random()<0.01){
+
+            tx+=Math.random()*300-150;
+            ty+=Math.random()*300-150;
+
+        }
+
+    }
+
+    if(mode==="creature"){
+
+        /*
+        Creature moves aggressively.
+        */
+
+        tx=player.x;
+        ty=player.y;
+
+    }
+
+    if(mode==="body"){
+
+        /*
+        The body-horror enemy gets
+        progressively faster.
+        */
+
+        tx=player.x;
+        ty=player.y;
+
+        threat.speed+=0.00003;
+
+    }
+
+    if(mode==="supernatural"){
+
+        /*
+        Occasionally teleport between
+        rooms.
+        */
+
+        if(Math.random()<0.002){
+
+            threat.x=Math.random()*800+100;
+            threat.y=Math.random()*400+100;
+
+        }
+
+        tx=player.x;
+        ty=player.y;
+
+    }
+
+    if(mode==="survival"){
+
+        tx=player.x;
+        ty=player.y;
+
+    }
+
+
+    const dx=tx-threat.x;
+    const dy=ty-threat.y;
+
+    const dist=Math.hypot(dx,dy);
+
+    if(dist>1){
+
+        threat.x+=dx/dist*threat.speed;
+        threat.y+=dy/dist*threat.speed;
+
+    }
+
+
+    /*
+    Only chase strongly when in
+    same room.
+    */
+
+    const distanceToPlayer=
+        Math.hypot(
+            threat.x-player.x,
+            threat.y-player.y
+        );
+
+
+    if(distanceToPlayer<30){
+
+        caught();
+
+    }
+
+}
+
+
+/* =========================
+   CAUGHT
+========================= */
+
+function caught(){
+
+    if(hiding){
+        return;
+    }
+
+    running=false;
+
+    document.getElementById("death")
+        .style.display="flex";
+
+}
+
+
+/* =========================
+   DRAW
+========================= */
+
+function draw(){
+
+    ctx.fillStyle="#101010";
+    ctx.fillRect(0,0,1000,600);
+
+
+    /* floor */
+
+    ctx.fillStyle="#25201b";
+
+    ctx.fillRect(
+        35,
+        50,
+        930,
+        515
+    );
+
+
+    /* wood floor */
+
+    ctx.strokeStyle="#342d25";
+
+    for(let y=70;y<560;y+=35){
+
+        ctx.beginPath();
+        ctx.moveTo(35,y);
+        ctx.lineTo(965,y);
+        ctx.stroke();
+
+    }
+
+
+    /* walls */
+
+    ctx.fillStyle="#15110e";
+
+    ctx.fillRect(0,0,1000,50);
+    ctx.fillRect(0,565,1000,35);
+
+    ctx.fillRect(0,50,35,515);
+    ctx.fillRect(965,50,35,515);
+
+
+    /* doors */
+
+    for(const d of rooms[room].doors){
+
+        let x=d.x;
+
+        if(x<100) x=0;
+        if(x>900) x=950;
+
+        ctx.fillStyle=
+            isDoorLocked(room,d)
+            ? "#292929"
+            : "#47392d";
+
+        ctx.fillRect(
+            x,
+            d.y,
+            50,
+            120
+        );
+
+        ctx.strokeStyle="#777";
+        ctx.strokeRect(
+            x,
+            d.y,
+            50,
+            120
+        );
+
+        ctx.fillStyle="#aaa";
+        ctx.font="10px monospace";
+        ctx.textAlign="center";
+
+        ctx.fillText(
+            isDoorLocked(room,d)
+            ?"LOCKED"
+            :"OPEN",
+            x+25,
+            d.y+65
+        );
+
+    }
+
+
+    /* furniture */
+
+    for(const f of rooms[room].furniture){
+
+        ctx.fillStyle="#3b3027";
+        ctx.strokeStyle="#665548";
+
+        ctx.fillRect(
+            f.x,
+            f.y,
+            f.w,
+            f.h
+        );
+
+        ctx.strokeRect(
+            f.x,
+            f.y,
+            f.w,
+            f.h
+        );
+
+        ctx.fillStyle="#9a8574";
+        ctx.font="11px monospace";
+        ctx.textAlign="center";
+
+        ctx.fillText(
+            f.n,
+            f.x+f.w/2,
+            f.y+f.h/2
+        );
+
+    }
+
+
+    /* items */
+
+    for(const item of rooms[room].items){
+
+        ctx.fillStyle="#d0b75a";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            item.x,
+            item.y,
+            8,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+    }
+
+
+    /* threat */
+
+    if(threat.active && !escapeReady){
+
+        ctx.fillStyle="#111";
+        ctx.strokeStyle="#777";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            threat.x,
+            threat.y,
+            15,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+        ctx.stroke();
+
+
+        if(mode==="slasher"){
+
+            ctx.fillStyle="#ddd";
+
+            ctx.fillRect(
+                threat.x-8,
+                threat.y-6,
+                16,
+                10
+            );
+
+        }
+
+        if(mode==="body"){
+
+            ctx.fillStyle="#777";
+
+            ctx.beginPath();
+
+            ctx.arc(
+                threat.x,
+                threat.y,
+                21,
+                0,
+                Math.PI*2
+            );
+
+            ctx.stroke();
+
+        }
+
+        if(mode==="creature"){
+
+            ctx.strokeStyle="#aaa";
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                threat.x-18,
+                threat.y-12
+            );
+
+            ctx.lineTo(
+                threat.x-30,
+                threat.y-25
+            );
