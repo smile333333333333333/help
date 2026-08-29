@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNFINISHED</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =====================================================
+         MAIN MENU
+    ====================================================== -->
+
+    <div id="mainMenu" class="screen">
+
+        <div class="titleArea">
+            <div class="smallTitle">PROJECT</div>
+            <h1>UNFINISHED</h1>
+            <div class="buildText">BUILD 0.0.0</div>
+        </div>
+
+        <div class="menuButtons">
+
+            <button id="newGameButton">
+                NEW GAME
+            </button>
+
+            <button id="continueButton">
+                CONTINUE
+            </button>
+
+            <button id="archiveButton">
+                ARCHIVE
+            </button>
+
+            <button id="settingsButton">
+                SETTINGS
+            </button>
+
+        </div>
+
+        <div class="menuWarning">
+            PROJECT STATUS: ABANDONED
+        </div>
+
+        <div class="version">
+            ORIGINAL DEVELOPMENT DATE: UNKNOWN
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         GAME
+    ====================================================== -->
+
+    <div id="gameScreen" class="screen hidden">
+
+        <canvas id="gameCanvas"></canvas>
+
+
+        <!-- HUD -->
+
+        <div id="hud">
+
+            <div class="hudBox">
+
+                <div class="hudLabel">
+                    LOCATION
+                </div>
+
+                <div id="roomName">
+                    LOBBY
+                </div>
+
+            </div>
+
+
+            <div class="hudBox">
+
+                <div class="hudLabel">
+                    BUILD
+                </div>
+
+                <div id="buildNumber">
+                    0.0.0
+                </div>
+
+            </div>
+
+
+            <div class="hudBox">
+
+                <div class="hudLabel">
+                    INVENTORY
+                </div>
+
+                <div id="inventoryCount">
+                    0
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Interaction hint -->
+
+        <div id="interactionHint"></div>
+
+
+        <!-- Dialogue -->
+
+        <div id="dialogueBox" class="hidden">
+
+            <div id="speakerName">
+                UNKNOWN
+            </div>
+
+            <div id="dialogueText">
+                ...
+            </div>
+
+            <div id="dialogueChoices"></div>
+
+            <button id="dialogueContinue">
+                CONTINUE
+            </button>
+
+        </div>
+
+
+        <!-- Notification -->
+
+        <div id="notification"></div>
+
+
+        <!-- Pause menu -->
+
+        <div id="pauseMenu" class="overlay hidden">
+
+            <div class="pausePanel">
+
+                <h2>PAUSED</h2>
+
+                <button id="resumeButton">
+                    RESUME
+                </button>
+
+                <button id="saveButton">
+                    SAVE
+                </button>
+
+                <button id="quitButton">
+                    RETURN TO MENU
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             INVENTORY
+        ================================================== -->
+
+        <div id="inventoryScreen" class="overlay hidden">
+
+            <div class="inventoryPanel">
+
+                <h2>INVENTORY</h2>
+
+                <div id="inventoryItems"></div>
+
+                <button id="closeInventory">
+                    CLOSE
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             PUZZLE SCREEN
+        ================================================== -->
+
+        <div id="puzzleScreen" class="overlay hidden">
+
+            <div class="puzzlePanel">
+
+                <div id="puzzleTitle">
+                    PUZZLE
+                </div>
+
+                <div id="puzzleDescription"></div>
+
+                <div id="puzzleContent"></div>
+
+                <div id="puzzleButtons">
+
+                    <button id="puzzleSubmit">
+                        SUBMIT
+                    </button>
+
+                    <button id="puzzleCancel">
+                        CANCEL
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             DRAWING SCREEN
+        ================================================== -->
+
+        <div id="drawingScreen" class="overlay hidden">
+
+            <div class="drawingPanel">
+
+                <h2 id="drawingTitle">
+                    MISSING CHARACTER
+                </h2>
+
+                <p id="drawingInstructions">
+                    This character was never completed.
+                    Draw what you think belongs here.
+                </p>
+
+                <canvas
+                    id="drawingCanvas"
+                    width="500"
+                    height="400">
+                </canvas>
+
+                <div class="drawingButtons">
+
+                    <button id="clearDrawing">
+                        CLEAR
+                    </button>
+
+                    <button id="finishDrawing">
+                        FINISH
+                    </button>
+
+                    <button id="cancelDrawing">
+                        CANCEL
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             REPAIR SCREEN
+        ================================================== -->
+
+        <div id="repairScreen" class="overlay hidden">
+
+            <div class="repairPanel">
+
+                <h2 id="repairTitle">
+                    REPAIR REQUIRED
+                </h2>
+
+                <p id="repairDescription">
+                    Something is missing.
+                </p>
+
+                <div id="repairParts"></div>
+
+                <div class="repairProgress">
+
+                    <div id="repairProgressBar"></div>
+
+                </div>
+
+                <div id="repairStatus">
+                    0 / 0
+                </div>
+
+                <button id="repairClose">
+                    FINISH
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             TERMINAL
+        ================================================== -->
+
+        <div id="terminalScreen" class="overlay hidden">
+
+            <div class="terminalPanel">
+
+                <div class="terminalHeader">
+                    DEVELOPMENT TERMINAL
+                </div>
+
+                <div id="terminalOutput">
+                    SYSTEM OFFLINE
+                </div>
+
+                <div class="terminalInputArea">
+
+                    <span>&gt;</span>
+
+                    <input
+                        id="terminalInput"
+                        type="text"
+                        autocomplete="off"
+                        spellcheck="false">
+
+                    <button id="terminalEnter">
+                        ENTER
+                    </button>
+
+                </div>
+
+                <button id="terminalClose">
+                    CLOSE
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             DOCUMENT / NOTE VIEWER
+        ================================================== -->
+
+        <div id="documentScreen" class="overlay hidden">
+
+            <div class="documentPanel">
+
+                <div id="documentTitle">
+                    DOCUMENT
+                </div>
+
+                <div id="documentText"></div>
+
+                <button id="documentClose">
+                    CLOSE
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             SECRET ARCHIVE
+        ================================================== -->
+
+        <div id="secretArchiveScreen" class="overlay hidden">
+
+            <div class="secretArchivePanel">
+
+                <div class="archiveHeader">
+                    RECOVERED DATA
+                </div>
+
+                <div id="secretArchiveText"></div>
+
+                <button id="secretArchiveClose">
+                    CLOSE
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             ENDING SCREEN
+        ================================================== -->
+
+        <div id="endingScreen" class="screen hidden">
+
+            <div id="endingContent">
+
+                <div id="endingTitle">
+                    THE END
+                </div>
+
+                <div id="endingText"></div>
+
+                <button id="endingContinue">
+                    CONTINUE
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             HORROR FLASH
+        ================================================== -->
+
+        <div id="horrorFlash"></div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ARCHIVE MENU
+    ====================================================== -->
+
+    <div id="archiveScreen" class="screen hidden">
+
+        <div class="archiveMenu">
+
+            <h1>PROJECT ARCHIVE</h1>
+
+            <div class="archiveWarning">
+                ACCESSING ARCHIVED DEVELOPMENT DATA
+            </div>
+
+            <div class="archiveList">
+
+                <button
+                    class="archiveEntry"
+                    data-archive="readme">
+                    README.TXT
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="devlog1">
+                    DEV_LOG_001
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="devlog2">
+                    DEV_LOG_002
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="devlog3">
+                    DEV_LOG_003
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="devlog4">
+                    DEV_LOG_004
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="character">
+                    CHARACTER_FILES
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="rooms">
+                    ROOM_FILES
+                </button>
+
+                <button
+                    class="archiveEntry"
+                    data-archive="final">
+                    FINAL_DEVELOPER_NOTE
+                </button>
+
+            </div>
+
+            <div id="archiveViewer" class="archiveViewer">
+
+                SELECT AN ARCHIVED FILE.
+
+            </div>
+
+            <button id="archiveBack">
+                RETURN
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         SETTINGS
+    ====================================================== -->
+
+    <div id="settingsScreen" class="screen hidden">
+
+        <div class="settingsPanel">
+
+            <h1>SETTINGS</h1>
+
+            <label>
+                TEXT SPEED
+
+                <select id="textSpeed">
+
+                    <option value="slow">
+                        SLOW
+                    </option>
+
+                    <option value="normal" selected>
+                        NORMAL
+                    </option>
+
+                    <option value="fast">
+                        FAST
+                    </option>
+
+                </select>
+
+            </label>
+
+
+            <label>
+                SCREEN EFFECTS
+
+                <input
+                    type="checkbox"
+                    id="screenEffects"
+                    checked>
+            </label>
+
+
+            <label>
+                AMBIENT SOUNDS
+
+                <input
+                    type="checkbox"
+                    id="ambientSounds"
+                    checked>
+            </label>
+
+
+            <button id="settingsBack">
+                RETURN
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         LOADING
+    ====================================================== -->
+
+    <div id="loadingScreen" class="screen hidden">
+
+        <div class="loadingPanel">
+
+            <div id="loadingText">
+                LOADING PROJECT...
+            </div>
+
+            <div class="loadingBar">
+
+                <div id="loadingProgress"></div>
+
+            </div>
+
+            <div id="loadingWarning">
+                DO NOT CLOSE THE PROGRAM.
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         JAVASCRIPT
+    ====================================================== -->
+
+    <script src="game.js"></script>
+
+</body>
+</html>
