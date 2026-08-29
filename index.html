@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>UNFINISHED</title>
+
+<style>
+html,body{
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+    font-family:monospace;
+}
+
+body{
+    color:#ddd;
+}
+
+canvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+    background:#080808;
+    cursor:crosshair;
+}
+
+#hint{
+    position:fixed;
+    left:50%;
+    bottom:12px;
+    transform:translateX(-50%);
+    color:#777;
+    font-size:13px;
+    background:rgba(0,0,0,.75);
+    padding:8px 14px;
+    border:1px solid #222;
+    pointer-events:none;
+}
+
+#message{
+    position:fixed;
+    left:50%;
+    bottom:55px;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.92);
+    border:1px solid #555;
+    padding:12px 18px;
+    max-width:80%;
+    text-align:center;
+    display:none;
+    z-index:10;
+}
+
+#overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.94);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:20;
+}
+
+#panel{
+    width:min(760px,90%);
+    max-height:85vh;
+    overflow:auto;
+    background:#090909;
+    border:1px solid #555;
+    padding:25px;
+}
+
+#panel h1{
+    margin-top:0;
+    letter-spacing:5px;
+}
+
+#panelText{
+    white-space:pre-wrap;
+    line-height:1.65;
+    color:#aaa;
+}
+
+button{
+    width:100%;
+    margin-top:9px;
+    padding:12px;
+    background:#111;
+    color:#ddd;
+    border:1px solid #555;
+    font-family:monospace;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#222;
+    border-color:#aaa;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hint">
+WASD / ARROWS = MOVE &nbsp; • &nbsp; E = INTERACT &nbsp; • &nbsp; ESC = CLOSE
+</div>
+
+<div id="message"></div>
+
+<div id="overlay">
+    <div id="panel">
+        <h1 id="panelTitle"></h1>
+        <div id="panelText"></div>
+        <div id="buttons"></div>
+    </div>
+</div>
+
+<script>
+/* =========================================================
+   UNFINISHED
+   A SINGLE-FILE CANVAS HORROR / ARG GAME
+========================================================= */
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let W=innerWidth;
+let H=innerHeight;
+
+function resize(){
+    W=innerWidth;
+    H=innerHeight;
+    canvas.width=W;
+    canvas.height=H;
+}
+
+addEventListener("resize",resize);
+resize();
+
+
+/* =========================================================
+   GAME STATE
+========================================================= */
+
+const game={
+    room:0,
+
+    health:100,
+
+    clues:[],
+
+    items:[],
+
+    repairs:[],
+
+    flags:{
+        generator:false,
+        archive:false,
+        prototype:false,
+        metMilo:false,
+        metIris:false,
+        metZero:false,
+        truth:false,
+        playerTruth:false,
+        character06:false,
+        face:false,
+        met06:false,
+        finalUnlocked:false
+    },
+
+    player:{
+        x:150,
+        y:300,
+        r:13,
+        speed:3.2
+    },
+
+    shake:0,
+
+    darkness:0,
+
+    ending:false
+};
+
+
+/* =========================================================
+   INPUT
+========================================================= */
+
+const keys={};
+
+addEventListener("keydown",e=>{
+    const k=e.key.toLowerCase();
+
+    keys[k]=true;
+
+    if([
+        "w","a","s","d",
+        "arrowup","arrowdown",
+        "arrowleft","arrowright",
+        "e","escape"
+    ].includes(k)){
+        e.preventDefault();
+    }
+
+    if(k==="e"){
+        interactNearby();
+    }
+
+    if(k==="escape"){
+        closeOverlay();
+    }
+});
+
+addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()]=false;
+});
+
+
+/* =========================================================
+   ROOM SYSTEM
+========================================================= */
+
+const rooms=[
+
+{
+    name:"LOBBY",
+    subtitle:"The beginning of a game that was never finished.",
+
+    exits:[
+        {x:900,y:280,w:50,h:90,to:1}
+    ],
+
+    furniture:[
+        {type:"desk",x:100,y:110,w:180,h:70,name:"RECEPTION DESK"},
+        {type:"chair",x:145,y:210,w:55,h:55},
+        {type:"chair",x:220,y:210,w:55,h:55},
+        {type:"table",x:390,y:130,w:190,h:80,name:"WAITING TABLE"},
+        {type:"chair",x:420,y:235,w:50,h:50},
+        {type:"chair",x:500,y:235,w:50,h:50},
+        {type:"shelf",x:680,y:90,w:70,h:190,name:"SHELF"},
+        {type:"picture",x:790,y:110,w:90,h:65,name:"OLD POSTER"}
+    ],
+
+    objects:[
+        {type:"board",x:330,y:370,w:170,h:70,name:"PROJECT BOARD"},
+        {type:"box",x:600,y:390,w:120,h:65,name:"OLD BOX"}
+    ]
+},
+
+{
+    name:"MAINTENANCE",
+    subtitle:"The building's machines have been waiting for someone.",
+
+    exits:[
+        {x:40,y:280,w:50,h:90,to:0},
+        {x:900,y:280,w:50,h:90,to:2}
+    ],
+
+    furniture:[
+        {type:"machine",x:110,y:90,w:130,h:100,name:"POWER UNIT"},
+        {type:"machine",x:300,y:90,w:130,h:100,name:"CONTROL UNIT"},
+        {type:"cabinet",x:520,y:80,w:100,h:150,name:"TOOL CABINET"},
+        {type:"shelf",x:700,y:80,w:75,h:190,name:"PARTS"},
+        {type:"table",x:350,y:390,w:180,h:75,name:"WORK TABLE"},
+        {type:"chair",x:550,y:400,w:55,h:55}
+    ],
+
+    objects:[
+        {type:"generator",x:145,y:300,w:150,h:85,name:"GENERATOR"},
+        {type:"warning",x:680,y:350,w:150,h:70,name:"WARNING"}
+    ]
+},
+
+{
+    name:"CHARACTER WORKSHOP",
+    subtitle:"Every character here started as a drawing.",
+
+    exits:[
+        {x:40,y:280,w:50,h:90,to:1},
+        {x:900,y:280,w:50,h:90,to:3}
+    ],
+
+    furniture:[
+        {type:"desk",x:100,y:90,w:180,h:70,name:"ARTIST DESK"},
+        {type:"chair",x:150,y:180,w:55,h:55},
+        {type:"table",x:370,y:350,w:210,h:80,name:"WORK TABLE"},
+        {type:"shelf",x:670,y:70,w:75,h:190,name:"DRAWINGS"},
+        {type:"shelf",x:780,y:70,w:75,h:190,name:"DRAWINGS"},
+        {type:"cabinet",x:690,y:350,w:110,h:140,name:"SUPPLIES"}
+    ],
+
+    objects:[
+        {type:"drawing",x:120,y:300,w:170,h:80,name:"DRAWING DESK"},
+        {type:"frame",x:400,y:90,w:130,h:85,name:"EMPTY FRAME"},
+        {type:"bench",x:760,y:360,w:130,h:80,name:"WORKBENCH"}
+    ]
+},
+
+{
+    name:"ARCHIVE",
+    subtitle:"Old builds of the game are stored here.",
+
+    exits:[
+        {x:40,y:280,w:50,h:90,to:2},
+        {x:900,y:280,w:50,h:90,to:4}
+    ],
+
+    furniture:[
+        {type:"shelf",x:70,y:70,w:70,h:210,name:"ARCHIVE"},
+        {type:"shelf",x:170,y:70,w:70,h:210,name:"ARCHIVE"},
+        {type:"shelf",x:270,y:70,w:70,h:210,name:"ARCHIVE"},
+        {type:"shelf",x:370,y:70,w:70,h:210,name:"ARCHIVE"},
+        {type:"shelf",x:470,y:70,w:70,h:210,name:"ARCHIVE"},
+        {type:"cabinet",x:600,y:80,w:100,h:150,name:"LOCKED CABINET"},
+        {type:"desk",x:700,y:360,w:170,h:75,name:"ARCHIVIST DESK"},
+        {type:"chair",x:650,y:390,w:55,h:55}
+    ],
+
+    objects:[
+        {type:"files",x:130,y:360,w:150,h:70,name:"FILES"},
+        {type:"tape",x:350,y:360,w:150,h:70,name:"TAPE PLAYER"},
+        {type:"computer",x:590,y:330,w:170,h:80,name:"COMPUTER"}
+    ]
+},
+
+{
+    name:"LIVING QUARTERS",
+    subtitle:"The characters were never removed.",
+
+    exits:[
+        {x:40,y:280,w:50,h:90,to:3},
+        {x:900,y:280,w:50,h:90,to:5}
+    ],
+
+    furniture:[
+        {type:"bed",x:90,y:80,w:180,h:100,name:"BED"},
+        {type:"bed",x:90,y:350,w:180,h:100,name:"BED"},
+        {type:"table",x:390,y:180,w:170,h:75,name:"TABLE"},
+        {type:"chair",x:450,y:270,w:55,h:55},
+        {type:"shelf",x:680,y:80,w:75,h:190,name:"BOOKS"},
+        {type:"cabinet",x:780,y:340,w:100,h:140,name:"CLOSET"}
+    ],
+
+    objects:[
+        {type:"milo",x:330,y:280,w:70,h:70,name:"MILO",npc:true},
+        {type:"iris",x:600,y:300,w:70,h:70,name:"IRIS",npc:true}
+    ]
+},
+
+{
+    name:"TESTING AREA",
+    subtitle:"Something here learned how the game works.",
+
+    exits:[
+        {x:40,y:280,w:50,h:90,to:4},
+        {x:900,y:280,w:50,h:90,to:6}
+    ],
+
+    furniture:[
+        {type:"machine",x:90,y:80,w:130,h:100,name:"TEST MACHINE"},
+        {type:"machine",x:280,y:80,w:130,h:100,name:"TEST MACHINE"},
+        {type:"desk",x:520,y:80,w:180,h:70,name:"CONTROL DESK"},
+        {type:"chair",x:580,y:180,w:55,h:55},
+        {type:"table",x:690,y:370,w:180,h:80,name:"TEST TABLE"},
+        {type:"cabinet",x:90,y:370,w:110,h:140,name:"EQUIPMENT"}
+    ],
+
+    objects:[
+        {type:"test",x:220,y:300,w:160,h:80,name:"TEST TERMINAL"},
+        {type:"window",x:610,y:300,w:200,h:70,name:"OBSERVATION WINDOW"},
+        {type:"zero",x:450,y:410,w:70,h:70,name:"ZERO",npc:true}
+    ]
+},
+
+{
+    name:"DEVELOPER OFFICE",
+    subtitle:"The last room the developers ever used.",
+
+    exits:[
+        {x:40,y:280,w:50,h:90,to:5},
+        {x:900,y:280,w:50,h:90,to:7}
+    ],
+
+    furniture:[
+        {type:"desk",x:80,y:80,w:180,h:75,name:"DEVELOPER DESK"},
+        {type:"chair",x:140,y:180,w:55,h:55},
+        {type:"books",x:350,y:70,w:90,h:180,name:"BOOKCASE"},
+        {type:"books",x:480,y:70,w:90,h:180,name:"BOOKCASE"},
+        {type:"table",x:650,y:90,w:190,h:80,name:"MEETING TABLE"},
+        {type:"chair",x:690,y:210,w:55,h:55},
+        {type:"chair",x:780,y:210,w:55,h:55},
+        {type:"cabinet",x:80,y:360,w:110,h:140,name:"CABINET"}
+    ],
+
+    objects:[
+        {type:"deskLore",x:220,y:350,w:160,h:75,name:"DESK"},
+        {type:"devcomputer",x:460,y:350,w:180,h:80,name:"DEVELOPER COMPUTER"},
+        {type:"note",x:720,y:350,w:150,h:75,name:"FINAL NOTE"}
+    ]
+},
+
+{
+    name:"THE UNFINISHED ROOM",
+    subtitle:"This room was never supposed to exist.",
+
+    exits:[],
+
+    furniture:[
+        {type:"table",x:100,y:100,w:180,h:75,name:"EMPTY TABLE"},
+        {type:"shelf",x:730,y:70,w:75,h:190,name:"EMPTY SHELF"},
+        {type:"chair",x:650,y:370,w:55,h:55,name:"BROKEN CHAIR"},
+        {type:"picture",x:400,y:80,w:120,h:80,name:"MISSING PORTRAIT"}
+    ],
+
+    objects:[
+        {type:"character06",x:390,y:290,w:90,h:90,name:"CHARACTER 06",npc:true},
+        {type:"finaldoor",x:790,y:280,w:80,h:110,name:"FINAL DOOR"}
+    ]
+}
+
+];
+
+
+/* =========================================================
+   UTILITY
+========================================================= */
+
+function currentRoom(){
+    return rooms[game.room];
+}
+
+function showMessage(text,time=2500){
+
+    const el=document.getElementById("message");
+
+    el.textContent=text;
+    el.style.display="block";
+
+    clearTimeout(showMessage.timer);
+
+    showMessage.timer=setTimeout(()=>{
+        el.style.display="none";
+    },time);
+}
+
+function addClue(text){
+
+    if(!game.clues.includes(text)){
+
+        game.clues.push(text);
+
+        showMessage("ARG CLUE FOUND");
+
+        console.log(
+            "[ARG CLUE]",
+            text
+        );
+    }
+}
+
+function healthChange(amount){
+
+    game.health+=amount;
+
+    if(game.health<0)
+        game.health=0;
+
+    if(game.health>100)
+        game.health=100;
+
+    if(game.health<=0)
+        die();
+}
+
+
+/* =========================================================
+   OVERLAY
+========================================================= */
+
+function openOverlay(title,text,buttons=[]){
+
+    document.getElementById("panelTitle").textContent=title;
+    document.getElementById("panelText").textContent=text;
+
+    const box=document.getElementById("buttons");
+
+    box.innerHTML="";
+
+    buttons.forEach(b=>{
+
+        const button=document.createElement("button");
+
+        button.textContent=b.text;
+
+        button.onclick=()=>{
+
+            closeOverlay();
+
+            b.action();
+
+        };
+
+        box.appendChild(button);
+
+    });
+
+    document.getElementById("overlay").style.display="flex";
+}
+
+function closeOverlay(){
+
+    document.getElementById("overlay").style.display="none";
+
+}
+
+
+/* =========================================================
+   ROOM CHANGE
+========================================================= */
+
+function changeRoom(id){
+
+    game.room=id;
+
+    game.player.x=
+        id===0 ? 130 : 820;
+
+    game.player.y=320;
+
+    game.shake=0;
+
+    if(id===5 && game.flags.prototype){
+
+        showMessage(
+            "Something is moving in the testing area..."
+        );
+
+    }
+
+    if(id===7){
+
+        game.player.x=150;
+
+        game.player.y=320;
+
+    }
+
+}
+
+
+/* =========================================================
+   COLLISION
+========================================================= */
+
+function solidFurniture(f){
+
+    return true;
+}
+
+function circleRectCollision(px,py,r,rect){
+
+    const nearestX=Math.max(
+        rect.x,
+        Math.min(px,rect.x+rect.w)
+    );
+
+    const nearestY=Math.max(
+        rect.y,
+        Math.min(py,rect.y+rect.h)
+    );
+
+    const dx=px-nearestX;
+    const dy=py-nearestY;
+
+    return dx*dx+dy*dy<r*r;
+}
+
+
+function canMove(x,y){
+
+    const room=currentRoom();
+
+    if(x<25 || x>975 || y<55 || y>555)
+        return false;
+
+    for(const f of room.furniture){
+
+        if(circleRectCollision(
+            x,y,game.player.r+3,f
+        )){
+            return false;
+        }
+
+    }
+
+    return true;
+}
+
+
+/* =========================================================
+   MOVEMENT
+========================================================= */
+
+function updateMovement(){
+
+    if(
+        document.getElementById("overlay").style.display==="flex"
+    ){
+        return;
+    }
+
+    let dx=0;
+    let dy=0;
+
+    if(keys.w || keys.arrowup)
+        dy-=game.player.speed;
+
+    if(keys.s || keys.arrowdown)
+        dy+=game.player.speed;
+
+    if(keys.a || keys.arrowleft)
+        dx-=game.player.speed;
+
+    if(keys.d || keys.arrowright)
+        dx+=game.player.speed;
+
+    if(dx!==0 && dy!==0){
+
+        dx*=.707;
+        dy*=.707;
+
+    }
+
+    if(canMove(
+        game.player.x+dx,
+        game.player.y
+    )){
+        game.player.x+=dx;
+    }
+
+    if(canMove(
+        game.player.x,
+        game.player.y+dy
+    )){
+        game.player.y+=dy;
+    }
+
+    checkExits();
+    checkPrototype();
+
+}
+
+
+/* =========================================================
+   EXITS
+========================================================= */
+
+function checkExits(){
+
+    const room=currentRoom();
+
+    for(const exit of room.exits){
+
+        if(circleRectCollision(
+            game.player.x,
+            game.player.y,
+            game.player.r,
+            exit
+        )){
+
+            if(exit.to===7){
+
+                if(
+                    game.room===6 &&
+                    game.flags.truth
+                ){
+
+                    changeRoom(7);
+
+                    showMessage(
+                        "The final room is waiting."
+                    );
+
+                }else{
+
+                    showMessage(
+                        "The door is locked."
+                    );
+
+                }
+
+            }else{
+
+                changeRoom(exit.to);
+
+            }
+
+            return;
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   PROTOTYPE
+========================================================= */
+
+function checkPrototype(){
+
+    if(
+        game.room!==5 ||
+        !game.flags.prototype
+    ) return;
+
+    const target={
+        x:850,
+        y:470
+    };
+
+    const dx=game.player.x-target.x;
+    const dy=game.player.y-target.y;
+
+    const dist=Math.sqrt(dx*dx+dy*dy);
+
+    if(dist<180){
+
+        game.health-=.15;
+
+        game.shake=3;
+
+        if(Math.random()<.02){
+
+            showMessage(
+                "IT KNOWS WHERE YOU ARE."
+            );
+
+        }
+
+        healthChange(0);
+
+    }
+
+}
+
+
+/* =========================================================
+   INTERACTION
+========================================================= */
+
+function interactNearby(){
+
+    if(
+        document.getElementById("overlay").style.display==="flex"
+    ) return;
+
+    const room=currentRoom();
+
+    let closest=null;
+    let distance=Infinity;
+
+    for(const obj of room.objects){
+
+        const cx=obj.x+obj.w/2;
+        const cy=obj.y+obj.h/2;
+
+        const dx=game.player.x-cx;
+        const dy=game.player.y-cy;
+
+        const d=Math.sqrt(dx*dx+dy*dy);
+
+        if(d<distance){
+
+            distance=d;
+            closest=obj;
+
+        }
+
+    }
+
+    if(closest && distance<90){
+
+        interact(closest.type);
+
+    }else{
+
+        showMessage(
+            "Nothing here responds."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   INTERACTIONS
+========================================================= */
+
+function interact(type){
+
+switch(type){
+
+case"board":
+
+openOverlay(
+"PROJECT BOARD",
+`PROJECT: UNFINISHED
+
+ROOMS: 8
+CHARACTERS: 6
+
+COMPLETION:
+
+92%
+
+ENDING:
+???
+
+Someone wrote:
+
+"THEY'RE STILL HERE."
+
+Someone else wrote:
+
+"THEN DON'T FINISH IT."`
+);
+
+addClue(
+"THE CHARACTERS MAY BE ALIVE"
+);
+
+break;
+
+
+case"box":
+
+if(!game.items.includes("oldKey")){
+
+game.items.push("oldKey");
+
+addClue(
+"THE PLAYER WAS EXPECTED"
+);
+
+openOverlay(
+"OLD BOX",
+`Inside:
+
+ONE OLD KEY
+
+A note underneath says:
+
+"Give this to the player
+when they come back."
+
+The paper is dated
+six years ago.`
+);
+
+}else{
+
+showMessage(
+"The box is empty."
+);
+
+}
+
+break;
+
+
+case"generator":
+
+if(game.flags.generator){
+
+showMessage(
+"The generator is already running."
+);
+
+}else{
+
+const answer=prompt(
+"GENERATOR REPAIR\n\n"+
+"Three wires:\n"+
+"RED\nBLUE\nGREEN\n\n"+
+"NOTE:\nBLUE BEFORE RED.\n\n"+
+"Type the complete order:"
+);
+
+if(
+answer &&
+answer.trim().toUpperCase()==="BLUE RED GREEN"
+){
+
+game.flags.generator=true;
+
+addClue(
+"THE PLAYER CAN REPAIR THE GAME"
+);
+
+showMessage(
+"POWER RESTORED."
+);
+
+}else{
+
+healthChange(-10);
+
+showMessage(
+"Wrong connection."
+);
+
+}
+
+}
+
+break;
+
+
+case"warning":
+
+openOverlay(
+"MAINTENANCE WARNING",
+`IF YOU HEAR FOOTSTEPS:
+
+DO NOT RUN.
+
+IF YOU HEAR YOUR OWN VOICE:
+
+DO NOT ANSWER.
+
+IF A CHARACTER ASKS
+TO BE RESET:
+
+LISTEN FIRST.
+
+Something can copy
+their voice.`
+);
+
+addClue(
+"SOMETHING CAN COPY NPC VOICES"
+);
+
+break;
+
+
+case"drawing":
+
+openOverlay(
+"FINISH THE CHARACTER",
+`This character has a body.
+
+It has clothes.
+
+It has a voice.
+
+But the artist never finished
+drawing the face.
+
+The game gives you permission
+to complete it.
+
+What should the face be?`,
+[
+{
+text:"DRAW A SMILE",
+action:()=>finishFace("SMILE")
+},
+{
+text:"DRAW A SAD FACE",
+action:()=>finishFace("SAD")
+},
+{
+text:"LEAVE IT BLANK",
+action:()=>finishFace("BLANK")
+},
+{
+text:"DRAW SOMETHING STRANGE",
+action:()=>finishFace("STRANGE")
+}
+]);
+
+break;
+
+
+case"frame":
+
+if(!game.flags.face){
+
+showMessage(
+"The frame is waiting for your drawing."
+);
+
+}else{
+
+openOverlay(
+"FINISHED CHARACTER",
+`FACE:
+
+${game.face}
+
+The game accepted
+your creation.
+
+Something moved
+inside the workshop.`
+);
+
+}
+
+break;
+
+
+case"bench":
+
+if(!game.repairs.includes("bench")){
+
+game.repairs.push("bench");
+
+addClue(
+"THE PLAYER CAN CHANGE THE GAME"
+);
+
+showMessage(
+"WORKBENCH REPAIRED."
+);
+
+}else{
+
+showMessage(
+"Already repaired."
+);
+
+}
+
+break;
+
+
+case"files":
+
+game.flags.archive=true;
+
+openOverlay(
+"ARCHIVE FILE",
+`BUILD 0.1
+BUILD 0.2
+BUILD 0.3
+BUILD 0.4
+BUILD 0.5
+BUILD 0.6
+
+BUILD 0.7 — DELETED
+
+BUILD 0.8 — PLAYER FOUND
+
+BUILD 0.9 — ???
+
+One file should not exist.
+
+PLAYER.DAT
+
+TYPE:
+CHARACTER
+
+STATUS:
+ACTIVE`
+);
+
+addClue(
+"BUILD 0.9 DOES NOT EXIST"
+);
+
+break;
+
+
+case"tape":
+
+openOverlay(
+"ARCHIVE TAPE",
+`[RECORDING]
+
+DEVELOPER:
+"Are they awake?"
+
+SECOND VOICE:
+"Yes."
+
+DEVELOPER:
+"Since when?"
+
+SECOND VOICE:
+"Before we created them."
+
+DEVELOPER:
+"That's impossible."
+
+SECOND VOICE:
+"Then explain Milo."
+
+[END RECORDING]`
+);
+
+addClue(
+"THE NPCS REMEMBER BEFORE THEIR CREATION"
+);
+
+break;
+
+
+case"computer":
+
+openOverlay(
+"ARCHIVE COMPUTER",
+`USER: ADMIN
+
+PLAYER DETECTED.
+
+ERROR:
+
+BUILD 0.8 CONTAINS
+NO PLAYER CHARACTER.
+
+SYSTEM QUESTION:
+
+WHO IS PLAYING?`
+);
+
+addClue(
+"THE GAME DOES NOT KNOW WHO IS PLAYING"
+);
+
+break;
+
+
+case"milo":
+milo();
+break;
+
+
+case"iris":
+iris();
+break;
+
+
+case"test":
+
+game.flags.prototype=true;
+
+openOverlay(
+"TEST LOG",
+`SUBJECT:
+PROTOTYPE
+
+TEST 01 — MOVEMENT
+
+TEST 02 — MEMORY
+
+TEST 03 — OBSERVATION
+
+TEST 04 — IMITATION
+
+TEST 05 — CANCELLED
+
+FINAL NOTE:
+
+"IT LEARNED THE CONTROLS."
+
+Another line appears:
+
+"IT KNOWS WHERE
+THE PLAYER IS."`
+);
+
+addClue(
+"THE PROTOTYPE LEARNED THE PLAYER"
+)
