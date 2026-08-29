@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UNFINISHED</title>
+
+<style>
+html,body{
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+}
+
+canvas{
+    display:block;
+    width:100%;
+    height:100%;
+}
+
+#controls{
+    position:fixed;
+    bottom:8px;
+    left:50%;
+    transform:translateX(-50%);
+    color:#777;
+    font-family:monospace;
+    font-size:12px;
+    pointer-events:none;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+<div id="controls">WASD / ARROWS = MOVE &nbsp;&nbsp; E = INTERACT</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+canvas.width=1000;
+canvas.height=600;
+
+const keys={};
+
+document.addEventListener("keydown",e=>{
+    keys[e.key.toLowerCase()]=true;
+
+    if(e.key.toLowerCase()==="e"){
+        interact();
+    }
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()]=false;
+});
+
+
+/* =========================
+   GAME STATE
+========================= */
+
+let room=0;
+let clues=0;
+let health=100;
+
+let message="";
+let messageTimer=0;
+
+let generatorFixed=false;
+let faceFinished=false;
+let archiveFound=false;
+let truthFound=false;
+let sixReset=false;
+let gameEnded=false;
+
+
+/* =========================
+   PLAYER
+========================= */
+
+const player={
+    x:100,
+    y:300,
+    radius:9,
+    speed:3
+};
+
+
+/* =========================
+   ROOMS
+========================= */
+
+const rooms=[
+
+{
+name:"LOBBY",
+
+furniture:[
+{x:70,y:80,w:200,h:70,n:"RECEPTION"},
+{x:100,y:200,w:70,h:50,n:"CHAIR"},
+{x:210,y:200,w:70,h:50,n:"CHAIR"},
+{x:390,y:90,w:200,h:70,n:"TABLE"},
+{x:700,y:80,w:90,h:190,n:"SHELF"},
+{x:820,y:90,w:90,h:70,n:"POSTER"}
+],
+
+objects:[
+{x:300,y:350,w:190,h:70,n:"PROJECT BOARD",t:"board"},
+{x:620,y:350,w:160,h:70,n:"OLD BOX",t:"box"}
+]
+
+},
+
+{
+name:"MAINTENANCE",
+
+furniture:[
+{x:70,y:80,w:150,h:100,n:"POWER UNIT"},
+{x:280,y:80,w:150,h:100,n:"CONTROL"},
+{x:520,y:70,w:100,h:180,n:"TOOLS"},
+{x:700,y:70,w:90,h:180,n:"PARTS"},
+{x:350,y:390,w:200,h:70,n:"WORK TABLE"}
+],
+
+objects:[
+{x:90,y:280,w:190,h:80,n:"GENERATOR",t:"generator"},
+{x:650,y:350,w:190,h:80,n:"WARNING",t:"warning"}
+]
+
+},
+
+{
+name:"CHARACTER WORKSHOP",
+
+furniture:[
+{x:70,y:80,w:200,h:70,n:"ARTIST DESK"},
+{x:120,y:180,w:70,h:50,n:"CHAIR"},
+{x:360,y:350,w:220,h:80,n:"WORK TABLE"},
+{x:690,y:70,w:80,h:190,n:"DRAWINGS"},
+{x:800,y:70,w:80,h:190,n:"DRAWINGS"}
+],
+
+objects:[
+{x:100,y:300,w:190,h:80,n:"MISSING FACE",t:"drawing"},
+{x:420,y:90,w:130,h:90,n:"EMPTY FRAME",t:"frame"}
+]
+
+},
+
+{
+name:"ARCHIVE",
+
+furniture:[
+{x:60,y:60,w:70,h:220,n:"FILES"},
+{x:160,y:60,w:70,h:220,n:"FILES"},
+{x:260,y:60,w:70,h:220,n:"FILES"},
+{x:360,y:60,w:70,h:220,n:"FILES"},
+{x:460,y:60,w:70,h:220,n:"FILES"},
+{x:700,y:350,w:190,h:80,n:"ARCHIVE DESK"}
+],
+
+objects:[
+{x:90,y:360,w:170,h:70,n:"OLD FILES",t:"files"},
+{x:350,y:360,w:170,h:70,n:"TAPE",t:"tape"},
+{x:570,y:330,w:180,h:90,n:"COMPUTER",t:"computer"}
+]
+
+},
+
+{
+name:"LIVING QUARTERS",
+
+furniture:[
+{x:60,y:70,w:200,h:90,n:"BED"},
+{x:60,y:350,w:200,h:90,n:"BED"},
+{x:390,y:170,w:180,h:80,n:"TABLE"},
+{x:680,y:70,w:90,h:190,n:"BOOKS"},
+{x:800,y:350,w:100,h:140,n:"CLOSET"}
+],
+
+objects:[
+{x:300,y:270,w:100,h:100,n:"MILO",t:"milo"},
+{x:600,y:270,w:100,h:100,n:"IRIS",t:"iris"}
+]
+
+},
+
+{
+name:"TESTING AREA",
+
+furniture:[
+{x:70,y:70,w:140,h:100,n:"TEST MACHINE"},
+{x:270,y:70,w:140,h:100,n:"TEST MACHINE"},
+{x:520,y:70,w:190,h:70,n:"CONTROL"},
+{x:680,y:350,w:200,h:80,n:"TEST TABLE"}
+],
+
+objects:[
+{x:200,y:300,w:190,h:80,n:"TEST TERMINAL",t:"test"},
+{x:600,y:300,w:220,h:70,n:"WINDOW",t:"window"},
+{x:420,y:400,w:100,h:100,n:"ZERO",t:"zero"}
+]
+
+},
+
+{
+name:"DEVELOPER OFFICE",
+
+furniture:[
+{x:70,y:70,w:190,h:75,n:"DEVELOPER DESK"},
+{x:350,y:60,w:90,h:190,n:"BOOKCASE"},
+{x:480,y:60,w:90,h:190,n:"BOOKCASE"},
+{x:650,y:80,w:200,h:80,n:"MEETING TABLE"},
+{x:70,y:360,w:120,h:140,n:"CABINET"}
+],
+
+objects:[
+{x:220,y:350,w:170,h:80,n:"NOTES",t:"notes"},
+{x:450,y:340,w:190,h:90,n:"COMPUTER",t:"developer"},
+{x:710,y:350,w:170,h:80,n:"FINAL NOTE",t:"finalnote"}
+]
+
+},
+
+{
+name:"THE UNFINISHED ROOM",
+
+furniture:[
+{x:80,y:90,w:190,h:80,n:"EMPTY TABLE"},
+{x:720,y:70,w:80,h:190,n:"EMPTY SHELF"},
+{x:620,y:380,w:70,h:60,n:"BROKEN CHAIR"},
+{x:400,y:70,w:140,h:90,n:"MISSING PORTRAIT"}
+],
+
+objects:[
+{x:350,y:270,w:130,h:120,n:"CHARACTER 06",t:"six"},
+{x:760,y:260,w:130,h:130,n:"FINAL DOOR",t:"door"}
+]
+
+}
+
+];
+
+
+/* =========================
+   MESSAGE SYSTEM
+========================= */
+
+function showText(text,seconds){
+
+    message=text;
+    messageTimer=seconds*60;
+
+}
+
+
+/* =========================
+   ROOM TRANSITION
+========================= */
+
+function goRight(){
+
+    if(room < rooms.length-1){
+
+        room++;
+
+        player.x=65;
+        player.y=300;
+
+        showText(
+            "ENTERED:\n\n"+rooms[room].name,
+            1.5
+        );
+
+    }else{
+
+        player.x=940;
+
+    }
+
+}
+
+
+function goLeft(){
+
+    if(room>0){
+
+        room--;
+
+        player.x=935;
+        player.y=300;
+
+        showText(
+            "RETURNED TO:\n\n"+rooms[room].name,
+            1.5
+        );
+
+    }else{
+
+        player.x=60;
+
+    }
+
+}
+
+
+/* =========================
+   COLLISION
+========================= */
+
+function blocked(x,y){
+
+    /*
+       IMPORTANT:
+       The left and right sides have
+       openings from y=240 to y=360.
+    */
+
+    if(x<35){
+
+        if(y>=230 && y<=370){
+            return false;
+        }
+
+        return true;
+    }
+
+    if(x>965){
+
+        if(y>=230 && y<=370){
+            return false;
+        }
+
+        return true;
+    }
+
+    if(y<55 || y>565){
+        return true;
+    }
+
+
+    const furniture=rooms[room].furniture;
+
+    for(let i=0;i<furniture.length;i++){
+
+        const f=furniture[i];
+
+        if(
+            x>f.x-10 &&
+            x<f.x+f.w+10 &&
+            y>f.y-10 &&
+            y<f.y+f.h+10
+        ){
+
+            return true;
+
+        }
+
+    }
+
+    return false;
+
+}
+
+
+/* =========================
+   UPDATE
+========================= */
+
+function update(){
+
+    if(gameEnded){
+        return;
+    }
+
+    let dx=0;
+    let dy=0;
+
+    if(keys["w"]||keys["arrowup"]){
+        dy=-1;
+    }
+
+    if(keys["s"]||keys["arrowdown"]){
+        dy=1;
+    }
+
+    if(keys["a"]||keys["arrowleft"]){
+        dx=-1;
+    }
+
+    if(keys["d"]||keys["arrowright"]){
+        dx=1;
+    }
+
+    if(dx!==0 && dy!==0){
+
+        dx*=0.707;
+        dy*=0.707;
+
+    }
+
+
+    let nx=player.x+dx*player.speed;
+    let ny=player.y+dy*player.speed;
+
+
+    if(!blocked(nx,player.y)){
+        player.x=nx;
+    }
+
+    if(!blocked(player.x,ny)){
+        player.y=ny;
+    }
+
+
+    /*
+       ROOM EXIT CHECK HAPPENS AFTER
+       MOVEMENT AND BEFORE THE WALL
+       CAN TRAP THE PLAYER.
+    */
+
+    if(player.x>970){
+
+        goRight();
+
+    }
+
+    if(player.x<30){
+
+        goLeft();
+
+    }
+
+
+    if(messageTimer>0){
+
+        messageTimer--;
+
+    }
+
+}
+
+
+/* =========================
+   INTERACTION
+========================= */
+
+function interact(){
+
+    if(gameEnded){
+        return;
+    }
+
+    const objects=rooms[room].objects;
+
+    let nearest=null;
+    let nearestDistance=Infinity;
+
+    for(let i=0;i<objects.length;i++){
+
+        const o=objects[i];
+
+        const ox=o.x+o.w/2;
+        const oy=o.y+o.h/2;
+
+        const distance=Math.hypot(
+            player.x-ox,
+            player.y-oy
+        );
+
+        if(distance<nearestDistance){
+
+            nearestDistance=distance;
+            nearest=o;
+
+        }
+
+    }
+
+
+    if(nearest && nearestDistance<115){
+
+        useObject(nearest.t);
+
+    }else{
+
+        showText(
+            "Nothing here responds.",
+            2
+        );
+
+    }
+
+}
+
+
+/* =========================
+   OBJECTS
+========================= */
+
+function useObject(type){
+
+    if(type==="board"){
+
+        clues++;
+
+        showText(
+            "PROJECT: UNFINISHED\n\n"+
+            "COMPLETION: 92%\n"+
+            "CHARACTERS: 6\n\n"+
+            "\"THEY'RE STILL HERE.\"\n\n"+
+            "Someone added:\n"+
+            "\"DON'T FINISH IT.\"",
+            6
+        );
+
+    }
+
+
+    else if(type==="box"){
+
+        clues++;
+
+        showText(
+            "Inside the box is an old key.\n\n"+
+            "A note says:\n\n"+
+            "\"Give this to the player\n"+
+            "when they come back.\"",
+            5
+        );
+
+    }
+
+
+    else if(type==="generator"){
+
+        if(generatorFixed){
+
+            showText(
+                "The generator is already running.",
+                3
+            );
+
+        }else{
+
+            generatorFixed=true;
+            clues++;
+
+            showText(
+                "You reconnect the wires.\n\n"+
+                "The generator starts.\n\n"+
+                "POWER RESTORED.\n\n"+
+                "PLAYER ACTION DETECTED.",
+                6
+            );
+
+        }
+
+    }
+
+
+    else if(type==="warning"){
+
+        clues++;
+
+        showText(
+            "MAINTENANCE WARNING\n\n"+
+            "DO NOT ANSWER YOUR OWN VOICE.\n\n"+
+            "DO NOT FOLLOW FOOTSTEPS.\n\n"+
+            "DO NOT FINISH THE GAME.",
+            6
+        );
+
+    }
+
+
+    else if(type==="drawing"){
+
+        if(faceFinished){
+
+            showText(
+                "The character already has a face.",
+                3
+            );
+
+        }else{
+
+            faceFinished=true;
+            clues++;
+
+            showText(
+                "The character was never given a face.\n\n"+
+                "You finish it yourself.\n\n"+
+                "The character looks at you.\n\n"+
+                "\"Thank you.\"",
+                6
+            );
+
+        }
+
+    }
+
+
+    else if(type==="frame"){
+
+        if(faceFinished){
+
+            showText(
+                "The finished character appears inside the frame.\n\n"+
+                "It wasn't there a moment ago.",
+                5
+            );
+
+        }else{
+
+            showText(
+                "The empty frame is waiting for a face.",
+                3
+            );
+
+        }
+
+    }
+
+
+    else if(type==="files"){
+
+        archiveFound=true;
+        clues++;
+
+        showText(
+            "ARCHIVE FILE\n\n"+
+            "BUILD 0.1\n"+
+            "BUILD 0.2\n"+
+            "BUILD 0.3\n"+
+            "BUILD 0.4\n"+
+            "BUILD 0.5\n"+
+            "BUILD 0.6\n\n"+
+            "BUILD 0.7 — DELETED\n\n"+
+            "BUILD 0.8 — PLAYER FOUND\n\n"+
+            "PLAYER.DAT\n"+
+            "TYPE: CHARACTER\n"+
+            "STATUS: ACTIVE",
+            8
+        );
+
+    }
+
+
+    else if(type==="tape"){
+
+        clues++;
+
+        showText(
+            "[OLD RECORDING]\n\n"+
+            "DEVELOPER:\n"+
+            "\"Are they awake?\"\n\n"+
+            "VOICE:\n"+
+            "\"Yes.\"\n\n"+
+            "DEVELOPER:\n"+
+            "\"Since when?\"\n\n"+
+            "VOICE:\n"+
+            "\"Before you created them.\"",
+            7
+        );
+
+    }
+
+
+    else if(type==="computer"){
+
+        clues++;
+
+        showText(
+            "ARCHIVE COMPUTER\n\n"+
+            "ERROR.\n\n"+
+            "PLAYER CHARACTER NOT FOUND.\n\n"+
+            "PLAYER LOCATION:\n"+
+            "HERE\n\n"+
+            "WHO IS PLAYING?",
+            7
+        );
+
+    }
+
+
+    else if(type==="milo"){
+
+        showText(
+            "MILO:\n\n"+
+            "\"You're real.\"\n\n"+
+            "\"I've been waiting for someone to come back.\"\n\n"+
+            "\"Everyone else left.\"\n\n"+
+            "\"Please don't disappear.\"",
+            7
+        );
+
+    }
+
+
+    else if(type==="iris"){
+
+        clues++;
+
+        showText(
+            "IRIS:\n\n"+
+            "\"Nobody finished my story.\"\n\n"+
+            "\"So I kept living in the middle of it.\"\n\n"+
+            "\"If you find the reset terminal...\"\n\n"+
+            "\"Please reset me.\"",
+            7
+        );
+
+    }
+
+
+    else if(type==="test"){
+
+        clues++;
+
+        showText(
+            "TEST LOG\n\n"+
+            "MOVEMENT: PASS\n"+
+            "MEMORY: PASS\n"+
+            "IMITATION: PASS\n"+
+            "OBSERVATION: PASS\n\n"+
+            "FINAL NOTE:\n\n"+
+            "\"IT LEARNED THE CONTROLS.\"",
+            7
+        );
+
+    }
+
+
+    else if(type==="window"){
+
+        if(clues<5){
+
+            showText(
+                "The room behind the glass is empty.",
+                3
+            );
+
+        }else{
+
+            clues++;
+
+            showText(
+                "You look through the glass.\n\n"+
+                "The room is empty.\n\n"+
+                "But your reflection isn't.\n\n"+
+                "It moves a second after you do.",
+                6
+            );
+
+        }
+
+    }
+
+
+    else if(type==="zero"){
+
+        clues++;
+
+        showText(
+            "ZERO:\n\n"+
+            "\"They called me a monster.\"\n\n"+
+            "\"Then they gave me a name.\"\n\n"+
+            "\"Then memories.\"\n\n"+
+            "\"Then they tried to delete me.\"\n\n"+
+            "\"I remember every deletion.\"",
+            7
+        );
+
+    }
+
+
+    else if(type==="notes"){
+
+        clues++;
+
+        showText(
+            "DEVELOPER NOTES\n\n"+
+            "FINISH GAME\n\n"+
+            "CROSSED OUT.\n\n"+
+            "LEAVE THEM.\n\n"+
+            "CROSSED OUT.\n\n"+
+            "RUN.\n\n"+
+            "The developers never came back.",
+            7
+        );
+
+    }
+
+
+    else if(type==="developer"){
+
+        truthFound=true;
+        clues++;
+
+        showText(
+            "PLAYER.DAT\n\n"+
+            "TYPE: CHARACTER\n"+
+            "CREATOR: UNKNOWN\n"+
+            "MEMORIES: YES\n"+
+            "VOICE: YES\n\n"+
+            "LOCATION:\n\n"+
+            "HERE",
+            7
+        );
+
+    }
+
+
+    else if(type==="finalnote"){
+
+        truthFound=true;
+        clues++;
+
+        showText(
+            "FINAL DEVELOPER NOTE\n\n"+
+            "The game wasn't abandoned.\n\n"+
+            "It was locked.\n\n"+
+            "The characters were alive.\n\n"+
+            "Then something appeared.\n\n"+
+            "Not a monster.\n"+
+            "Not an NPC.\n\n"+
+            "THE PLAYER.",
+            8
+        );
+
+    }
+
+
+    else if(type==="six"){
+
+        if(!truthFound){
+
+            showText(
+                "CHARACTER 06:\n\n"+
+                "\"You're not ready yet.\"\n\n"+
+                "\"Find the truth first.\"",
+                5
+            );
+
+        }else if(!sixReset){
+
+            sixReset=true;
+            clues++;
+
+            showText(
+                "CHARACTER 06:\n\n"+
+                "\"You found it.\"\n\n"+
+                "\"Please reset me.\"\n\n"+
+                "RESET COMPLETE.\n\n"+
+                "\"Thank you.\"",
+                7
+            );
+
+        }else{
+
+            showText(
+                "The room is empty.",
+                3
+            );
+
+        }
+
+    }
+
+
+    else if(type==="door"){
+
+        if(truthFound && sixReset){
+
+            ending();
+
+        }else{
+
+            showText(
+                "THE DOOR IS LOCKED.\n\n"+
+                "Something is still missing.",
+                4
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================
+   ENDING
+========================= */
+
+function ending(){
+
+    gameEnded=true;
+
+    if(clues>=8){
+
+        showText(
+            "TRUE ENDING\n\n"+
+            "The final door opens.\n\n"+
+            "Every room begins disappearing.\n\n"+
+            "Milo disappears.\n"+
+            "Iris disappears.\n"+
+            "Zero disappears.\n"+
+            "Character 06 is already gone.\n\n"+
+            "The screen becomes empty.\n\n"+
+            "PLAYER.DAT\n\n"+
+            "TYPE: CHARACTER\n"+
+            "STATUS: ACTIVE\n\n"+
+            "A voice speaks.\n\n"+
+            "It sounds like you.\n\n"+
+            "\"You finished the game.\"\n\n"+
+            "\"Thank you for giving us an ending.\"\n\n"+
+            "\"Now we can leave.\"",
+            30
+        );
+
+    }else{
+
+        showText(
+            "INCOMPLETE ENDING\n\n"+
+            "You reached the end.\n\n"+
+            "But something is missing.\n\n"+
+            "BUILD 0.9\n"+
+            "STATUS: INCOMPLETE\n\n"+
+            "THERE IS MORE.",
+            15
+        );
+
+    }
+
+}
+
+
+/* =========================
+   DRAW
+========================= */
+
+function draw(){
+
+    ctx.fillStyle="#0b0b0b";
+    ctx.fillRect(0,0,1000,600);
+
+
+    /* FLOOR */
+
+    ctx.fillStyle="#151515";
+    ctx.fillRect(35,50,930,515);
+
+
+    /* FLOOR GRID */
+
+    ctx.strokeStyle="#1d1d1d";
+
+    for(let x=35;x<965;x+=40){
+
+        ctx.beginPath();
+        ctx.moveTo(x,50);
+        ctx.lineTo(x,565);
+        ctx.stroke();
+
+    }
+
+    for(let y=50;y<565;y+=40){
+
+        ctx.beginPath();
+        ctx.moveTo(35,y);
+        ctx.lineTo(965,y);
+        ctx.stroke();
+
+    }
+
+
+    /* WALLS WITH DOORWAYS */
+
+    ctx.fillStyle="#080808";
+
+    ctx.fillRect(0,0,1000,50);
+    ctx.fillRect(0,565,1000,35);
+
+    ctx.fillRect(0,50,35,180);
+    ctx.fillRect(0,370,35,195);
+
+    ctx.fillRect(965,50,35,180);
+    ctx.fillRect(965,370,35,195);
+
+
+    /* DOORWAY LIGHT */
+
+    ctx.fillStyle="#222";
+
+    ctx.fillRect(0,230,35,140);
+    ctx.fillRect(965,230,35,140);
+
+
+    /* FURNITURE */
+
+    const furniture=rooms[room].furniture;
+
+    for(let i=0;i<furniture.length;i++){
+
+        const f=furniture[i];
+
+        ctx.fillStyle="#252525";
+        ctx.strokeStyle="#555";
+
+        ctx.fillRect(
+            f.x,
+            f.y,
+            f.w,
+            f.h
+        );
+
+        ctx.strokeRect(
+            f.x,
+            f.y,
+            f.w,
+            f.h
+        );
+
+        ctx.fillStyle="#777";
+        ctx.font="11px monospace";
+        ctx.textAlign="center";
+
+        ctx.fillText(
+            f.n,
+            f.x+f.w/2,
+            f.y+f.h/2
+        );
+
+    }
+
+
+    /* OBJECTS */
+
+    const objects=rooms[room].objects;
+
+    for(let i=0;i<objects.length;i++){
+
+        const o=objects[i];
+
+        ctx.fillStyle="#080808";
+        ctx.strokeStyle="#777";
+
+        ctx.fillRect(
+            o.x,
+            o.y,
+            o.w,
+            o.h
+        );
+
+        ctx.strokeRect(
+            o.x,
+            o.y,
+            o.w,
+            o.h
+        );
+
+        ctx.fillStyle="#aaa";
+        ctx.font="12px monospace";
+
+        ctx.fillText(
+            o.n,
+            o.x+o.w/2,
+            o.y+o.h/2
+        );
+
+    }
+
+
+    /* PLAYER */
+
+    ctx.fillStyle="#eee";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        player.x,
+        player.y,
+        player.radius,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+
+    /* TOP BAR */
+
+    ctx.fillStyle="#050505";
+    ctx.fillRect(0,0,1000,50);
+
+    ctx.fillStyle="#ddd";
+    ctx.font="16px monospace";
+    ctx.textAlign="left";
+
+    ctx.fillText(
+        "UNFINISHED // "+rooms[room].name,
+        20,
+        31
+    );
+
+    ctx.textAlign="right";
+
+    ctx.fillText(
+        "CLUES: "+clues,
+        980,
+        31
+    );
+
+
+    /* MESSAGE */
+
+    if(messageTimer>0){
+
+        ctx.fillStyle="rgba(0,0,0,.96)";
+
+        ctx.fillRect(
+            150,
+            140,
+            700,
+            320
+        );
+
+        ctx.strokeStyle="#777";
+
+        ctx.strokeRect(
+            150,
+            140,
+            700,
+            320
+        );
+
+        ctx.fillStyle="#ddd";
+        ctx.font="16px monospace";
+        ctx.textAlign="center";
+
+        const lines=message.split("\n");
+
+        for(let i=0;i<lines.length;i++){
+
+            ctx.fillText(
+                lines[i],
+                500,
+                180+i*25
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================
+   LOOP
+========================= */
+
+function loop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(loop);
+
+}
+
+loop();
+
+</script>
+
+</body>
+  </html>
