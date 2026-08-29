@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Cabin Lockdown</title>
+
+<style>
+*{box-sizing:border-box}
+
+html,body{
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#080808;
+    font-family:monospace;
+}
+
+canvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+    cursor:crosshair;
+}
+
+#menu{
+    position:fixed;
+    inset:0;
+    z-index:20;
+    background:#090909;
+    color:#eee;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+}
+
+#menu h1{
+    font-size:42px;
+    margin:0 0 8px;
+}
+
+#menu p{
+    color:#999;
+    margin:5px 0 25px;
+}
+
+.buttons{
+    width:720px;
+    max-width:95%;
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:10px;
+}
+
+.buttons button{
+    width:220px;
+    min-height:100px;
+    padding:12px;
+    background:#181818;
+    color:#ddd;
+    border:2px solid #555;
+    font-family:monospace;
+    cursor:pointer;
+    touch-action:manipulation;
+}
+
+.buttons button:hover{
+    background:#292929;
+    border-color:#aaa;
+}
+
+.buttons button:active{
+    background:#444;
+}
+
+.buttons strong{
+    display:block;
+    font-size:17px;
+    margin-bottom:8px;
+}
+
+#hud{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    height:48px;
+    z-index:5;
+    display:none;
+    background:rgba(0,0,0,.85);
+    color:white;
+    padding:15px;
+    pointer-events:none;
+}
+
+#message{
+    position:fixed;
+    z-index:10;
+    top:65px;
+    left:50%;
+    transform:translateX(-50%);
+    padding:12px 20px;
+    background:rgba(0,0,0,.95);
+    border:1px solid #777;
+    color:white;
+    text-align:center;
+    white-space:pre-line;
+    display:none;
+}
+
+#death,#win{
+    position:fixed;
+    inset:0;
+    z-index:30;
+    background:#000;
+    color:white;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    text-align:center;
+}
+
+#death h1,#win h1{
+    font-size:48px;
+}
+
+#death button,#win button{
+    padding:12px 25px;
+    background:#111;
+    border:1px solid #777;
+    color:white;
+    font-family:monospace;
+    cursor:pointer;
+}
+
+#touch{
+    display:none;
+    position:fixed;
+    left:15px;
+    bottom:15px;
+    width:150px;
+    height:150px;
+    z-index:10;
+}
+
+.touch{
+    position:absolute;
+    width:48px;
+    height:48px;
+    background:rgba(255,255,255,.18);
+    border:1px solid #888;
+    color:white;
+    border-radius:8px;
+    font-size:20px;
+    touch-action:none;
+    user-select:none;
+}
+
+#up{left:51px;top:0}
+#left{left:0;top:51px}
+#down{left:51px;top:102px}
+#right{left:102px;top:51px}
+
+#use{
+    position:fixed;
+    right:20px;
+    bottom:35px;
+    width:75px;
+    height:75px;
+    border-radius:50%;
+    background:rgba(255,255,255,.18);
+    border:1px solid #888;
+    color:white;
+    display:none;
+    z-index:10;
+    touch-action:none;
+}
+
+#controls{
+    position:fixed;
+    right:15px;
+    top:60px;
+    color:#aaa;
+    font-size:12px;
+    text-align:right;
+    pointer-events:none;
+}
+
+@media(max-width:700px){
+    #menu h1{font-size:30px}
+
+    .buttons button{
+        width:145px;
+        min-height:82px;
+    }
+
+    #touch,#use{
+        display:block;
+    }
+
+    #controls{
+        display:none;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+    <h1>CABIN LOCKDOWN</h1>
+    <p>Choose your horror.</p>
+
+    <div class="buttons">
+
+        <button type="button" data-mode="slasher">
+            <strong>SLASHER</strong>
+            Breaks through locked doors.
+        </button>
+
+        <button type="button" data-mode="stalker">
+            <strong>STALKER</strong>
+            Disappears and relocates.
+        </button>
+
+        <button type="button" data-mode="creature">
+            <strong>CREATURE</strong>
+            Fast and unpredictable.
+        </button>
+
+        <button type="button" data-mode="body">
+            <strong>BODY HORROR</strong>
+            Gets stronger over time.
+        </button>
+
+        <button type="button" data-mode="supernatural">
+            <strong>SUPERNATURAL</strong>
+            Can appear suddenly.
+        </button>
+
+        <button type="button" data-mode="survival">
+            <strong>SURVIVAL</strong>
+            Combines several abilities.
+        </button>
+
+    </div>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="hud"></div>
+
+<div id="message"></div>
+
+<div id="controls">
+    WASD / ARROWS = MOVE<br>
+    E / SPACE / CLICK = INTERACT
+</div>
+
+<div id="touch">
+    <button class="touch" id="up">▲</button>
+    <button class="touch" id="left">◀</button>
+    <button class="touch" id="down">▼</button>
+    <button class="touch" id="right">▶</button>
+</div>
+
+<button id="use">E</button>
+
+<div id="death">
+    <h1>CAUGHT</h1>
+    <p>The cabin wins.</p>
+    <button id="retry">TRY AGAIN</button>
+</div>
+
+<div id="win">
+    <h1>YOU ESCAPED</h1>
+    <p>You made it out of the cabin.</p>
+    <button id="again">PLAY AGAIN</button>
+</div>
+
+<script>
+
+/* =========================
+   CANVAS
+========================= */
+
+var canvas=document.getElementById("game");
+var ctx=canvas.getContext("2d");
+
+canvas.width=1000;
+canvas.height=600;
+
+
+/* =========================
+   GAME STATE
+========================= */
+
+var playing=false;
+var mode="";
+var room=0;
+var gameTime=0;
+var messageTimer=0;
+
+var keys={};
+
+var inventory=[];
+
+
+/* =========================
+   PLAYER
+========================= */
+
+var player={
+    x:140,
+    y:300,
+    speed:3.2
+};
+
+
+/* =========================
+   KILLER
+========================= */
+
+var killer={
+    x:850,
+    y:300,
+    speed:.7
+};
+
+
+/* =========================
+   ROOMS
+========================= */
+
+var rooms=[
+
+{
+name:"LIVING ROOM",
+
+furniture:[
+{x:90,y:100,w:260,h:80,name:"SOFA"},
+{x:170,y:350,w:160,h:70,name:"TABLE"},
+{x:520,y:90,w:110,h:190,name:"BOOKCASE"},
+{x:720,y:350,w:170,h:80,name:"CABINET"}
+],
+
+doors:[
+{x:950,y:220,to:1,locked:false},
+{x:0,y:220,to:4,locked:false}
+],
+
+items:[
+{x:560,y:330,name:"BASEMENT KEY",id:"basement"}
+]
+
+},
+
+{
+name:"KITCHEN",
+
+furniture:[
+{x:80,y:100,w:260,h:70,name:"COUNTER"},
+{x:110,y:300,w:100,h:170,name:"FRIDGE"},
+{x:450,y:100,w:250,h:70,name:"TABLE"},
+{x:760,y:90,w:100,h:170,name:"CABINET"}
+],
+
+doors:[
+{x:0,y:220,to:0,locked:false},
+{x:950,y:220,to:2,locked:true}
+],
+
+items:[
+{x:790,y:330,name:"FLASHLIGHT",id:"flashlight"}
+]
+
+},
+
+{
+name:"BEDROOM",
+
+furniture:[
+{x:100,y:100,w:300,h:100,name:"BED"},
+{x:620,y:90,w:110,h:190,name:"WARDROBE"},
+{x:400,y:370,w:220,h:70,name:"DESK"}
+],
+
+doors:[
+{x:0,y:220,to:1,locked:true},
+{x:950,y:220,to:3,locked:false}
+],
+
+items:[
+{x:760,y:350,name:"CAR KEYS",id:"keys"}
+]
+
+},
+
+{
+name:"BATHROOM",
+
+furniture:[
+{x:100,y:100,w:180,h:80,name:"SINK"},
+{x:500,y:100,w:140,h:100,name:"TUB"},
+{x:750,y:90,w:100,h:180,name:"CABINET"}
+],
+
+doors:[
+{x:0,y:220,to:2,locked:false},
+{x:950,y:220,to:5,locked:false}
+],
+
+items:[
+{x:330,y:350,name:"FUSE",id:"fuse"}
+]
+
+},
+
+{
+name:"BACK PORCH",
+
+furniture:[
+{x:180,y:100,w:180,h:70,name:"BENCH"},
+{x:600,y:350,w:190,h:70,name:"WOOD PILE"}
+],
+
+doors:[
+{x:950,y:220,to:0,locked:false},
+{x:450,y:0,to:6,locked:false}
+],
+
+items:[
+{x:650,y:270,name:"BOLT CUTTERS",id:"cutters"}
+]
+
+},
+
+{
+name:"HALL",
+
+furniture:[
+{x:250,y:100,w:100,h:170,name:"SHELF"},
+{x:600,y:350,w:180,h:70,name:"TABLE"}
+],
+
+doors:[
+{x:0,y:220,to:3,locked:false},
+{x:950,y:220,to:7,locked:true}
+],
+
+items:[]
+
+},
+
+{
+name:"WOODS",
+
+furniture:[
+{x:100,y:100,w:80,h:100,name:"TREE"},
+{x:350,y:350,w:100,h:100,name:"TREE"},
+{x:700,y:100,w:80,h:100,name:"TREE"},
+{x:800,y:400,w:90,h:90,name:"TREE"}
+],
+
+doors:[
+{x:450,y:500,to:4,locked:false},
+{x:950,y:220,to:8,locked:false}
+],
+
+items:[
+{x:600,y:350,name:"GAS CAN",id:"gas"}
+]
+
+},
+
+{
+name:"BASEMENT",
+
+furniture:[
+{x:100,y:100,w:170,h:80,name:"WORKBENCH"},
+{x:400,y:90,w:100,h:210,name:"SHELVES"},
+{x:700,y:350,w:160,h:80,name:"GENERATOR"}
+],
+
+doors:[
+{x:0,y:220,to:5,locked:false}
+],
+
+items:[
+{x:700,y:280,name:"GENERATOR PART",id:"generator"}
+]
+
+},
+
+{
+name:"GARAGE",
+
+furniture:[
+{x:120,y:100,w:230,h:80,name:"WORKBENCH"},
+{x:600,y:90,w:230,h:120,name:"CAR"},
+{x:300,y:350,w:110,h:100,name:"TOOLS"}
+],
+
+doors:[
+{x:0,y:220,to:6,locked:false}
+],
+
+items:[]
+
+}
+
+];
+
+
+/* =========================
+   START GAME
+========================= */
+
+function startGame(selected){
+
+    mode=selected;
+    playing=true;
+
+    room=0;
+    gameTime=0;
+
+    player.x=140;
+    player.y=300;
+
+    killer.x=850;
+    killer.y=300;
+
+    inventory=[];
+
+    if(mode==="slasher"){
+        killer.speed=.68;
+    }
+
+    if(mode==="stalker"){
+        killer.speed=.50;
+    }
+
+    if(mode==="creature"){
+        killer.speed=.88;
+    }
+
+    if(mode==="body"){
+        killer.speed=.60;
+    }
+
+    if(mode==="supernatural"){
+        killer.speed=.55;
+    }
+
+    if(mode==="survival"){
+        killer.speed=.82;
+    }
+
+    document.getElementById("menu").style.display="none";
+    document.getElementById("hud").style.display="block";
+
+    showMessage(
+        "GET OUT OF THE CABIN\n\nWASD / ARROWS = MOVE\nE / SPACE = INTERACT",
+        4
+    );
+}
+
+
+/* =========================
+   KILLER BUTTONS
+========================= */
+
+var killerButtons=
+    document.querySelectorAll(".buttons button");
+
+for(var i=0;i<killerButtons.length;i++){
+
+    killerButtons[i].addEventListener(
+        "click",
+        function(){
+
+            startGame(
+                this.getAttribute("data-mode")
+            );
+
+        }
+    );
+
+}
+
+
+/* =========================
+   KEYBOARD
+========================= */
+
+window.addEventListener(
+    "keydown",
+    function(e){
+
+        var key=e.key.toLowerCase();
+
+        if(
+            key==="w" ||
+            key==="a" ||
+            key==="s" ||
+            key==="d" ||
+            key==="arrowup" ||
+            key==="arrowdown" ||
+            key==="arrowleft" ||
+            key==="arrowright" ||
+            key===" " ||
+            key==="e"
+        ){
+
+            e.preventDefault();
+
+        }
+
+        keys[key]=true;
+
+        if(
+            key==="e" ||
+            key===" "
+        ){
+
+            interact();
+
+        }
+
+    },
+    {passive:false}
+);
+
+
+window.addEventListener(
+    "keyup",
+    function(e){
+
+        keys[e.key.toLowerCase()]=false;
+
+    }
+);
+
+
+/* =========================
+   MOUSE
+========================= */
+
+canvas.addEventListener(
+    "mousedown",
+    function(){
+
+        if(playing){
+            interact();
+        }
+
+    }
+);
+
+
+/* =========================
+   TOUCH BUTTONS
+========================= */
+
+function setupTouch(id,key){
+
+    var button=document.getElementById(id);
+
+    function down(e){
+
+        e.preventDefault();
+        keys[key]=true;
+
+    }
+
+    function up(e){
+
+        e.preventDefault();
+        keys[key]=false;
+
+    }
+
+    button.addEventListener(
+        "touchstart",
+        down,
+        {passive:false}
+    );
+
+    button.addEventListener(
+        "touchend",
+        up,
+        {passive:false}
+    );
+
+    button.addEventListener(
+        "touchcancel",
+        up,
+        {passive:false}
+    );
+
+    /* Also works with mouse */
+
+    button.addEventListener(
+        "mousedown",
+        function(){
+
+            keys[key]=true;
+
+        }
+    );
+
+    button.addEventListener(
+        "mouseup",
+        function(){
+
+            keys[key]=false;
+
+        }
+    );
+
+}
+
+
+setupTouch("up","w");
+setupTouch("down","s");
+setupTouch("left","a");
+setupTouch("right","d");
+
+
+document.getElementById("use")
+.addEventListener(
+    "touchstart",
+    function(e){
+
+        e.preventDefault();
+        interact();
+
+    },
+    {passive:false}
+);
+
+
+/* =========================
+   MESSAGE
+========================= */
+
+function showMessage(text,seconds){
+
+    var box=document.getElementById("message");
+
+    box.textContent=text;
+    box.style.display="block";
+
+    messageTimer=seconds*60;
+
+}
+
+
+/* =========================
+   ITEMS
+========================= */
+
+function hasItem(id){
+
+    return inventory.indexOf(id)!==-1;
+
+}
+
+
+/* =========================
+   COLLISION
+========================= */
+
+function blocked(x,y){
+
+    if(x<45 || x>955 || y<58 || y>555){
+        return true;
+    }
+
+    var furniture=rooms[room].furniture;
+
+    for(var i=0;i<furniture.length;i++){
+
+        var f=furniture[i];
+
+        if(
+            x>f.x-12 &&
+            x<f.x+f.w+12 &&
+            y>f.y-12 &&
+            y<f.y+f.h+12
+        ){
+
+            return true;
+
+        }
+
+    }
+
+    return false;
+
+}
+
+
+/* =========================
+   DOORS
+========================= */
+
+function doorNear(){
+
+    var doors=rooms[room].doors;
+
+    for(var i=0;i<doors.length;i++){
+
+        var d=doors[i];
+
+        var dx=d.x;
+
+        var dy=d.y+60;
+
+        if(d.x<100){
+            dx=40;
+        }
+
+        if(d.x>900){
+            dx=960;
+        }
+
+        if(
+            Math.abs(player.x-dx)<80 &&
+            Math.abs(player.y-dy)<100
+        ){
+
+            return d;
+
+        }
+
+    }
+
+    return null;
+
+}
+
+
+function useDoor(d,side){
+
+    if(d.locked){
+
+        if(mode==="slasher"){
+
+            showMessage(
+                "LOCKED.\n\nBANG!\n\nSomething is hitting the door.",
+                2
+            );
+
+        }else{
+
+            showMessage(
+                "LOCKED.\n\nYou need another way.",
+                2
+            );
+
+        }
+
+        return;
+
+    }
+
+    room=d.to;
+
+    if(side==="right"){
+
+        player.x=65;
+        player.y=300;
+
+    }
+
+    else if(side==="left"){
+
+        player.x=935;
+        player.y=300;
+
+    }
+
+    else{
+
+        player.x=500;
+        player.y=500;
+
+    }
+
+    killer.x=850;
+    killer.y=300;
+
+    showMessage(
+        rooms[room].name,
+        1.5
+    );
+
+}
+
+
+/* =========================
+   INTERACT
+========================= */
+
+function interact(){
+
+    if(!playing){
+        return;
+    }
+
+
+    var r=rooms[room];
+
+
+    /* ITEM */
+
+    for(var i=r.items.length-1;i>=0;i--){
+
+        var item=r.items[i];
+
+        var distance=Math.hypot(
+            player.x-item.x,
+            player.y-item.y
+        );
+
+        if(distance<60){
+
+            inventory.push(item.id);
+
+            r.items.splice(i,1);
+
+            showMessage(
+                "FOUND:\n"+item.name,
+                2
+            );
+
+            return;
+
+        }
+
+    }
+
+
+    /* DOOR */
+
+    var d=doorNear();
+
+    if(d){
+
+        if(d.locked){
+
+            if(
+                room===1 &&
+                hasItem("basement")
+            ){
+
+                d.locked=false;
+
+                showMessage(
+                    "You use the basement key.\n\nDOOR UNLOCKED.",
+                    2
+                );
+
+            }
+
+            else{
+
+                showMessage(
+                    "LOCKED.",
+                    1.5
+                );
+
+            }
+
+            return;
+
+        }
+
+    }
+
+
+    /* GARAGE CAR */
+
+    if(room===8){
+
+        if(
+            player.x>570 &&
+            player.x<850 &&
+            player.y>60 &&
+            player.y<240
+        ){
+
+            escape();
+
+            return;
+
+        }
+
+    }
+
+
+    /* FURNITURE */
+
+    for(var j=0;j<r.furniture.length;j++){
+
+        var f=r.furniture[j];
+
+        if(
+            player.x>f.x-50 &&
+            player.x<f.x+f.w+50 &&
+            player.y>f.y-50 &&
+            player.y<f.y+f.h+50
+        ){
+
+            showMessage(
+                "You search the "+f.name+".",
+                1.5
+            );
+
+            return;
+
+        }
+
+    }
+
+
+    showMessage(
+        "Nothing useful here.",
+        1.2
+    );
+
+}
+
+
+/* =========================
+   ESCAPE
+========================= */
+
+function escape(){
+
+    var needed=[
+        "basement",
+        "flashlight",
+        "keys",
+        "fuse",
+        "cutters",
+        "gas",
+        "generator"
+    ];
+
+    var missing=[];
+
+    for(var i=0;i<needed.length;i++){
+
+        if(!hasItem(needed[i])){
+
+            missing.push(needed[i]);
+
+        }
+
+    }
+
+
+    if(missing.length===0){
+
+        playing=false;
+
+        document.getElementById("win")
+        .style.display="flex";
+
+    }
+
+    else{
+
+        showMessage(
+            "The car isn't ready.\n\n"+
+            "Missing: "+missing.length+" item(s).",
+            3
+        );
+
+    }
+
+}
+
+
+/* =========================
+   KILLER
+========================= */
+
+function updateKiller(){
+
+    if(!playing){
+        return;
+    }
+
+    gameTime++;
+
+
+    /* SLASHER */
+
+    if(mode==="slasher"){
+
+        killer.speed=.68;
+
+        chase();
+
+        if(gameTime%900===0){
+
+            showMessage(
+                "BANG!\n\nThe killer is breaking through something.",
+                2
+            );
+
+        }
+
+    }
+
+
+    /* STALKER */
+
+    if(mode==="stalker"){
+
+        killer.speed=.50;
+
+        chase();
+
+        if(gameTime%700===0){
+
+            killer.x=player.x+180;
+            killer.y=player.y-80;
+
+            clampKiller();
+
+            showMessage(
+                "The footsteps suddenly stop.",
+                2
+            );
+
+        }
+
+    }
+
+
+    /* CREATURE */
+
+    if(mode==="creature"){
+
+        killer.speed=.88;
+
+        chase();
+
+        if(gameTime%500===0){
+
+            killer.x=player.x+120;
+            killer.y=player.y+120;
+
+            clampKiller();
+
+        }
+
+    }
+
+
+    /* BODY HORROR */
+
+    if(mode==="body"){
+
+        killer.speed=
+            .60+
+            Math.min(.75,gameTime/5000);
+
+        chase();
+
+        if(gameTime%800===0){
+
+            showMessage(
+                "The creature is changing.",
+                2
+            );
+
+        }
+
+    }
+
+
+    /* SUPERNATURAL */
+
+    if(mode==="supernatural"){
+
+        killer.speed=.55;
+
+        chase();
+
+        if(gameTime%600===0){
+
+            killer.x=player.x+130;
+            killer.y=player.y;
+
+            clampKiller();
+
+            showMessage(
+                "The lights flicker.",
+                2
+            );
+
+        }
+
+    }
+
+
+    /* SURVIVAL */
+
+    if(mode==="survival"){
+
+        killer.speed=.82;
+
+        chase();
+
+        if(gameTime%700===0){
+
+            killer.x=player.x+120;
+            killer.y=player.y+70;
+
+            clampKiller();
+
+        }
+
+    }
+
+
+    var distance=Math.hypot(
+        player.x-killer.x,
+        player.y-killer.y
+    );
+
+    if(distance<27){
+
+        die();
+
+    }
+
+}
+
+
+function chase(){
+
+    var dx=player.x-killer.x;
+    var dy=player.y-killer.y;
+
+    var distance=Math.hypot(dx,dy);
+
+    if(distance>1){
+
+        killer.x+=
+            dx/distance*
+            killer.speed;
+
+        killer.y+=
+            dy/distance*
+            killer.speed;
+
+    }
+
+}
+
+
+function clampKiller(){
+
+    killer.x=Math.max(
+        60,
+        Math.min(940,killer.x)
+    );
+
+    killer.y=Math.max(
+        70,
+        Math.min(550,killer.y)
+    );
+
+}
+
+
+/* =========================
+   DEATH
+========================= */
+
+function die(){
+
+    playing=false;
+
+    document.getElementById("death")
+    .style.display="flex";
+
+}
+
+
+/* =========================
+   PLAYER UPDATE
+========================= */
+
+function update(){
+
+    if(!playing){
+        return;
+    }
+
+
+    var dx=0;
+    var dy=0;
+
+
+    if(
+        keys["w"] ||
+        keys["arrowup"]
+    ){
+        dy--;
+    }
+
+    if(
+        keys["s"] ||
+        keys["arrowdown"]
+    ){
+        dy++;
+    }
+
+    if(
+        keys["a"] ||
+        keys["arrowleft"]
+    ){
+        dx--;
+    }
+
+    if(
+        keys["d"] ||
+        keys["arrowright"]
+    ){
+        dx++;
+    }
+
+
+    if(dx!==0 && dy!==0){
+
+        dx*=.7071;
+        dy*=.7071;
+
+    }
+
+
+    var nx=
+        player.x+
+        dx*
+        player.speed;
+
+    var ny=
+        player.y+
+        dy*
+        player.speed;
+
+
+    if(!blocked(nx,player.y)){
+        player.x=nx;
+    }
+
+    if(!blocked(player.x,ny)){
+        player.y=ny;
+    }
+
+
+    /* RIGHT */
+
+    if(player.x>975){
+
+        var doors=rooms[room].doors;
+
+        for(var i=0;i<doors.length;i++){
+
+            if(
+                doors[i].x>900 &&
+                Math.abs(
+                    player.y-
+                    (doors[i].y+60)
+                )<95
+            ){
+
+                useDoor(
+                    doors[i],
+                    
