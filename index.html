@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNFINISHED</title>
+
+<style>
+html,body{
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+}
+
+body{
+    font-family:monospace;
+}
+
+canvas{
+    display:block;
+    width:100%;
+    height:100%;
+    background:#111;
+}
+
+#dialog{
+    position:fixed;
+    left:50%;
+    bottom:25px;
+    transform:translateX(-50%);
+    width:min(700px,90%);
+    padding:18px;
+    background:rgba(0,0,0,.94);
+    border:1px solid #777;
+    color:#ddd;
+    display:none;
+    z-index:5;
+    box-sizing:border-box;
+}
+
+#dialogTitle{
+    color:white;
+    font-size:20px;
+    margin-bottom:10px;
+}
+
+#dialogText{
+    white-space:pre-wrap;
+    line-height:1.5;
+}
+
+#dialog button{
+    display:block;
+    width:100%;
+    margin-top:8px;
+    padding:10px;
+    background:#111;
+    border:1px solid #555;
+    color:#ddd;
+    font-family:monospace;
+}
+
+#dialog button:hover{
+    background:#222;
+}
+
+#message{
+    position:fixed;
+    top:75px;
+    left:50%;
+    transform:translateX(-50%);
+    color:#aaa;
+    background:rgba(0,0,0,.75);
+    padding:8px 14px;
+    display:none;
+    z-index:4;
+}
+
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="message"></div>
+
+<div id="dialog">
+    <div id="dialogTitle"></div>
+    <div id="dialogText"></div>
+    <div id="dialogButtons"></div>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================
+   UNFINISHED
+   SINGLE FILE CANVAS HORROR / ARG GAME
+   ========================================================= */
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let WIDTH = 1000;
+let HEIGHT = 600;
+
+function resize(){
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
+}
+
+resize();
+
+
+/* =========================================================
+   INPUT
+   ========================================================= */
+
+const keys = {};
+
+window.addEventListener("keydown", function(e){
+
+    const key = e.key.toLowerCase();
+
+    keys[key] = true;
+
+    if(
+        key === "w" ||
+        key === "a" ||
+        key === "s" ||
+        key === "d" ||
+        key === "e" ||
+        key.startsWith("arrow")
+    ){
+        e.preventDefault();
+    }
+
+    if(key === "e"){
+        interact();
+    }
+
+    if(key === "escape"){
+        closeDialog();
+    }
+});
+
+window.addEventListener("keyup", function(e){
+    keys[e.key.toLowerCase()] = false;
+});
+
+
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+
+const game = {
+
+    room:0,
+
+    health:100,
+
+    clues:0,
+
+    ending:false,
+
+    face:false,
+
+    generator:false,
+
+    archive:false,
+
+    prototype:false,
+
+    metMilo:false,
+
+    metIris:false,
+
+    metZero:false,
+
+    metSix:false,
+
+    truth:false,
+
+    resetSix:false,
+
+    playerTruth:false,
+
+    repaired:false,
+
+    messageTimer:0,
+
+    scareTimer:0,
+
+    monsterX:850,
+
+    monsterY:470,
+
+    monsterActive:false
+
+};
+
+
+const player = {
+
+    x:150,
+
+    y:300,
+
+    size:18,
+
+    speed:3
+
+};
+
+
+/* =========================================================
+   ROOMS
+   ========================================================= */
+
+const rooms = [
+
+{
+    name:"LOBBY",
+    subtitle:"The game begins here.",
+
+    exits:[
+        {x:940,y:245,w:40,h:110,to:1}
+    ],
+
+    furniture:[
+        [80,90,190,70,"RECEPTION DESK"],
+        [110,200,60,50,"CHAIR"],
+        [200,200,60,50,"CHAIR"],
+        [380,100,200,80,"WAITING TABLE"],
+        [410,210,60,50,"CHAIR"],
+        [500,210,60,50,"CHAIR"],
+        [700,80,80,190,"SHELF"],
+        [810,100,100,65,"OLD POSTER"]
+    ],
+
+    objects:[
+        [300,360,200,80,"PROJECT BOARD","board"],
+        [620,370,130,70,"OLD BOX","box"]
+    ]
+},
+
+{
+    name:"MAINTENANCE",
+    subtitle:"Something is wrong with the power.",
+
+    exits:[
+        {x:20,y:245,w:40,h:110,to:0},
+        {x:940,y:245,w:40,h:110,to:2}
+    ],
+
+    furniture:[
+        [80,80,140,100,"POWER UNIT"],
+        [280,80,140,100,"CONTROL UNIT"],
+        [500,70,100,160,"TOOL CABINET"],
+        [690,70,80,190,"PARTS"],
+        [350,390,190,70,"WORK TABLE"],
+        [600,390,60,50,"CHAIR"]
+    ],
+
+    objects:[
+        [100,290,180,80,"GENERATOR","generator"],
+        [680,340,180,80,"WARNING","warning"]
+    ]
+},
+
+{
+    name:"CHARACTER WORKSHOP",
+    subtitle:"Every character started as a drawing.",
+
+    exits:[
+        {x:20,y:245,w:40,h:110,to:1},
+        {x:940,y:245,w:40,h:110,to:3}
+    ],
+
+    furniture:[
+        [80,80,190,70,"ARTIST DESK"],
+        [140,180,60,50,"CHAIR"],
+        [370,350,220,80,"WORK TABLE"],
+        [680,70,80,190,"DRAWINGS"],
+        [800,70,80,190,"DRAWINGS"],
+        [690,350,120,140,"SUPPLIES"]
+    ],
+
+    objects:[
+        [100,300,190,80,"DRAWING DESK","drawing"],
+        [400,80,140,90,"EMPTY FRAME","frame"],
+        [750,360,130,80,"WORKBENCH","bench"]
+    ]
+},
+
+{
+    name:"ARCHIVE",
+    subtitle:"Old builds are stored here.",
+
+    exits:[
+        {x:20,y:245,w:40,h:110,to:2},
+        {x:940,y:245,w:40,h:110,to:4}
+    ],
+
+    furniture:[
+        [60,60,70,220,"ARCHIVE"],
+        [160,60,70,220,"ARCHIVE"],
+        [260,60,70,220,"ARCHIVE"],
+        [360,60,70,220,"ARCHIVE"],
+        [460,60,70,220,"ARCHIVE"],
+        [610,70,110,160,"LOCKED CABINET"],
+        [730,350,180,80,"ARCHIVIST DESK"]
+    ],
+
+    objects:[
+        [100,360,160,70,"FILES","files"],
+        [340,360,160,70,"TAPE PLAYER","tape"],
+        [570,330,180,90,"COMPUTER","computer"]
+    ]
+},
+
+{
+    name:"LIVING QUARTERS",
+    subtitle:"The characters were never deleted.",
+
+    exits:[
+        {x:20,y:245,w:40,h:110,to:3},
+        {x:940,y:245,w:40,h:110,to:5}
+    ],
+
+    furniture:[
+        [70,70,190,100,"BED"],
+        [70,350,190,100,"BED"],
+        [390,170,180,80,"TABLE"],
+        [440,270,60,50,"CHAIR"],
+        [680,70,80,190,"BOOKS"],
+        [790,350,110,140,"CLOSET"]
+    ],
+
+    objects:[
+        [300,270,90,90,"MILO","milo"],
+        [600,270,90,90,"IRIS","iris"]
+    ]
+},
+
+{
+    name:"TESTING AREA",
+    subtitle:"The unfinished enemy is still running.",
+
+    exits:[
+        {x:20,y:245,w:40,h:110,to:4},
+        {x:940,y:245,w:40,h:110,to:6}
+    ],
+
+    furniture:[
+        [70,70,140,100,"TEST MACHINE"],
+        [270,70,140,100,"TEST MACHINE"],
+        [520,70,190,70,"CONTROL DESK"],
+        [570,180,60,50,"CHAIR"],
+        [690,360,190,80,"TEST TABLE"],
+        [80,370,120,140,"EQUIPMENT"]
+    ],
+
+    objects:[
+        [220,300,180,80,"TEST TERMINAL","test"],
+        [600,300,220,70,"OBSERVATION WINDOW","window"],
+        [430,400,90,90,"ZERO","zero"]
+    ]
+},
+
+{
+    name:"DEVELOPER OFFICE",
+    subtitle:"The last room the developers used.",
+
+    exits:[
+        {x:20,y:245,w:40,h:110,to:5},
+        {x:940,y:245,w:40,h:110,to:7}
+    ],
+
+    furniture:[
+        [70,70,190,75,"DEVELOPER DESK"],
+        [130,170,60,50,"CHAIR"],
+        [350,60,90,190,"BOOKCASE"],
+        [480,60,90,190,"BOOKCASE"],
+        [650,80,200,80,"MEETING TABLE"],
+        [690,200,60,50,"CHAIR"],
+        [780,200,60,50,"CHAIR"],
+        [70,360,120,140,"CABINET"]
+    ],
+
+    objects:[
+        [220,350,170,80,"DESK NOTES","desk"],
+        [450,340,190,90,"DEVELOPER COMPUTER","devcomputer"],
+        [710,350,170,80,"FINAL NOTE","note"]
+    ]
+},
+
+{
+    name:"THE UNFINISHED ROOM",
+    subtitle:"This room was never supposed to exist.",
+
+    exits:[],
+
+    furniture:[
+        [80,90,190,80,"EMPTY TABLE"],
+        [720,70,80,190,"EMPTY SHELF"],
+        [620,380,70,60,"BROKEN CHAIR"],
+        [400,70,140,90,"MISSING PORTRAIT"]
+    ],
+
+    objects:[
+        [370,270,100,100,"CHARACTER 06","six"],
+        [790,260,100,130,"FINAL DOOR","final"]
+    ]
+}
+
+];
+
+
+/* =========================================================
+   BASIC FUNCTIONS
+   ========================================================= */
+
+function room(){
+    return rooms[game.room];
+}
+
+
+function message(text,time=2500){
+
+    const el=document.getElementById("message");
+
+    el.textContent=text;
+    el.style.display="block";
+
+    clearTimeout(game.messageTimer);
+
+    game.messageTimer=setTimeout(function(){
+        el.style.display="none";
+    },time);
+}
+
+
+function clue(){
+
+    game.clues++;
+
+    message("ARG CLUE FOUND",1800);
+}
+
+
+function dialog(title,text,buttons=[]){
+
+    document.getElementById("dialogTitle").textContent=title;
+    document.getElementById("dialogText").textContent=text;
+
+    const box=document.getElementById("dialogButtons");
+
+    box.innerHTML="";
+
+    buttons.forEach(function(b){
+
+        const button=document.createElement("button");
+
+        button.textContent=b.text;
+
+        button.onclick=function(){
+
+            closeDialog();
+
+            if(b.action){
+                b.action();
+            }
+
+        };
+
+        box.appendChild(button);
+
+    });
+
+    document.getElementById("dialog").style.display="block";
+}
+
+
+function closeDialog(){
+
+    document.getElementById("dialog").style.display="none";
+
+}
+
+
+/* =========================================================
+   MOVEMENT
+   ========================================================= */
+
+function blocked(x,y){
+
+    if(x<35 || x>965 || y<65 || y>565){
+        return true;
+    }
+
+    const list=room().furniture;
+
+    for(let i=0;i<list.length;i++){
+
+        const f=list[i];
+
+        if(
+            x>f[0]-12 &&
+            x<f[0]+f[2]+12 &&
+            y>f[1]-12 &&
+            y<f[1]+f[3]+12
+        ){
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+function move(){
+
+    if(
+        document.getElementById("dialog").style.display==="block" ||
+        game.ending
+    ){
+        return;
+    }
+
+    let dx=0;
+    let dy=0;
+
+    if(keys["w"] || keys["arrowup"]) dy--;
+    if(keys["s"] || keys["arrowdown"]) dy++;
+    if(keys["a"] || keys["arrowleft"]) dx--;
+    if(keys["d"] || keys["arrowright"]) dx++;
+
+    if(dx!==0 && dy!==0){
+        dx*=0.707;
+        dy*=0.707;
+    }
+
+    const nx=player.x+dx*player.speed;
+    const ny=player.y+dy*player.speed;
+
+    if(!blocked(nx,player.y)){
+        player.x=nx;
+    }
+
+    if(!blocked(player.x,ny)){
+        player.y=ny;
+    }
+
+    checkExit();
+    monster();
+}
+
+
+/* =========================================================
+   EXITS
+   ========================================================= */
+
+function checkExit(){
+
+    const exits=room().exits;
+
+    for(let i=0;i<exits.length;i++){
+
+        const e=exits[i];
+
+        if(
+            player.x>e.x &&
+            player.x<e.x+e.w &&
+            player.y>e.y &&
+            player.y<e.y+e.h
+        ){
+
+            if(e.to===7 && !game.truth){
+
+                message("The final door is locked.");
+
+                player.x=880;
+
+                return;
+            }
+
+            changeRoom(e.to);
+
+            return;
+        }
+    }
+}
+
+
+function changeRoom(id){
+
+    game.room=id;
+
+    if(id===0){
+        player.x=100;
+    }else{
+        player.x=900;
+    }
+
+    player.y=300;
+
+    game.monsterActive=false;
+
+    message(room().name,1200);
+}
+
+
+/* =========================================================
+   INTERACTION
+   ========================================================= */
+
+function nearestObject(){
+
+    const list=room().objects;
+
+    let best=null;
+    let bestDistance=9999;
+
+    for(let i=0;i<list.length;i++){
+
+        const o=list[i];
+
+        const cx=o[0]+o[2]/2;
+        const cy=o[1]+o[3]/2;
+
+        const dx=player.x-cx;
+        const dy=player.y-cy;
+
+        const d=Math.sqrt(dx*dx+dy*dy);
+
+        if(d<bestDistance){
+
+            bestDistance=d;
+            best=o;
+        }
+    }
+
+    if(bestDistance<100){
+        return best;
+    }
+
+    return null;
+}
+
+
+function interact(){
+
+    if(document.getElementById("dialog").style.display==="block"){
+        return;
+    }
+
+    const obj=nearestObject();
+
+    if(!obj){
+
+        message("Nothing here responds.");
+
+        return;
+    }
+
+    const type=obj[5];
+
+    if(type==="board") board();
+    if(type==="box") box();
+    if(type==="generator") generator();
+    if(type==="warning") warning();
+    if(type==="drawing") drawing();
+    if(type==="frame") frame();
+    if(type==="bench") bench();
+    if(type==="files") files();
+    if(type==="tape") tape();
+    if(type==="computer") computer();
+    if(type==="milo") milo();
+    if(type==="iris") iris();
+    if(type==="test") test();
+    if(type==="window") windowClue();
+    if(type==="zero") zero();
+    if(type==="desk") desk();
+    if(type==="devcomputer") devcomputer();
+    if(type==="note") finalNote();
+    if(type==="six") characterSix();
+    if(type==="final") finalDoor();
+}
+
+
+/* =========================================================
+   LOBBY
+   ========================================================= */
+
+function board(){
+
+    dialog(
+        "PROJECT BOARD",
+        "PROJECT: UNFINISHED\n\n"+
+        "ROOMS: 8\n"+
+        "CHARACTERS: 6\n"+
+        "COMPLETION: 92%\n\n"+
+        "ENDING: ???\n\n"+
+        "Someone wrote:\n"+
+        "\"THEY'RE STILL HERE.\"\n\n"+
+        "Someone else wrote:\n"+
+        "\"THEN DON'T FINISH IT.\""
+    );
+
+    if(game.clues===0){
+        clue();
+    }
+}
+
+
+function box(){
+
+    dialog(
+        "OLD BOX",
+        "Inside the box is an old key.\n\n"+
+        "There is a note underneath.\n\n"+
+        "\"Give this to the player\n"+
+        "when they come back.\"\n\n"+
+        "The paper is dated six years ago."
+    );
+
+    clue();
+}
+
+
+/* =========================================================
+   MAINTENANCE
+   ========================================================= */
+
+function generator(){
+
+    if(game.generator){
+
+        message("The generator is already running.");
+
+        return;
+    }
+
+    dialog(
+        "GENERATOR",
+        "Three wires are disconnected.\n\n"+
+        "A note says:\n\n"+
+        "BLUE BEFORE RED.\n"+
+        "GREEN AFTER RED.\n\n"+
+        "Repair the generator?",
+        [
+            {
+                text:"CONNECT BLUE → RED → GREEN",
+                action:function(){
+
+                    game.generator=true;
+
+                    clue();
+
+                    message("POWER RESTORED.");
+                }
+            },
+            {
+                text:"LEAVE IT",
+                action:function(){}
+            }
+        ]
+    );
+}
+
+
+function warning(){
+
+    dialog(
+        "MAINTENANCE WARNING",
+        "IF YOU HEAR FOOTSTEPS:\n"+
+        "DO NOT RUN.\n\n"+
+        "IF YOU HEAR YOUR OWN VOICE:\n"+
+        "DO NOT ANSWER.\n\n"+
+        "IF A CHARACTER ASKS TO BE RESET:\n"+
+        "LISTEN FIRST.\n\n"+
+        "Something can copy their voice."
+    );
+
+    clue();
+}
+
+
+/* =========================================================
+   WORKSHOP
+   ========================================================= */
+
+function drawing(){
+
+    dialog(
+        "UNFINISHED CHARACTER",
+        "This character has a body.\n"+
+        "It has clothes.\n"+
+        "It has a voice.\n\n"+
+        "But the artist never finished the face.\n\n"+
+        "The game gives YOU permission to finish it.",
+        [
+            {
+                text:"DRAW A SMILE",
+                action:function(){
+                    game.face=true;
+                    clue();
+                    message("The game accepted your drawing.");
+                }
+            },
+            {
+                text:"DRAW A SAD FACE",
+                action:function(){
+                    game.face=true;
+                    clue();
+                    message("The game accepted your drawing.");
+                }
+            },
+            {
+                text:"DRAW SOMETHING STRANGE",
+                action:function(){
+                    game.face=true;
+                    clue();
+                    message("The game accepted your drawing.");
+                }
+            }
+        ]
+    );
+}
+
+
+function frame(){
+
+    if(!game.face){
+
+        message("The empty frame is waiting for the missing face.");
+
+        return;
+    }
+
+    dialog(
+        "THE FINISHED CHARACTER",
+        "The face is finally complete.\n\n"+
+        "For the first time, the character moves.\n\n"+
+        "It looks toward the door.\n\n"+
+        "Then it whispers:\n\n"+
+        "\"Thank you.\""
+    );
+}
+
+
+function bench(){
+
+    if(game.repaired){
+
+        message("The workbench is already repaired.");
+
+        return;
+    }
+
+    game.repaired=true;
+
+    clue();
+
+    dialog(
+        "WORKBENCH",
+        "You reconnect the loose cable.\n\n"+
+        "The machine comes alive.\n\n"+
+        "A hidden message appears:\n\n"+
+        "PLAYER ACTION DETECTED.\n\n"+
+        "THE GAME CAN BE CHANGED."
+    );
+}
+
+
+/* =========================================================
+   ARCHIVE
+   ========================================================= */
+
+function files(){
+
+    game.archive=true;
+
+    clue();
+
+    dialog(
+        "ARCHIVE FILE",
+        "BUILD 0.1\n"+
+        "BUILD 0.2\n"+
+        "BUILD 0.3\n"+
+        "BUILD 0.4\n"+
+        "BUILD 0.5\n"+
+        "BUILD 0.6\n\n"+
+        "BUILD 0.7 — DELETED\n\n"+
+        "BUILD 0.8 — PLAYER FOUND\n\n"+
+        "BUILD 0.9 — ERROR\n\n"+
+        "One file should not exist:\n\n"+
+        "PLAYER.DAT\n\n"+
+        "TYPE: CHARACTER\n"+
+        "STATUS: ACTIVE"
+    );
+}
+
+
+function tape(){
+
+    clue();
+
+    dialog(
+        "ARCHIVE TAPE",
+        "[RECORDING]\n\n"+
+        "DEVELOPER:\n"+
+        "\"Are they awake?\"\n\n"+
+        "SECOND VOICE:\n"+
+        "\"Yes.\"\n\n"+
+        "DEVELOPER:\n"+
+        "\"Since when?\"\n\n"+
+        "SECOND VOICE:\n"+
+        "\"Before we created them.\"\n\n"+
+        "DEVELOPER:\n"+
+        "\"That's impossible.\"\n\n"+
+        "SECOND VOICE:\n"+
+        "\"Then explain Milo.\"\n\n"+
+        "[END RECORDING]"
+    );
+}
+
+
+function computer(){
+
+    clue();
+
+    dialog(
+        "ARCHIVE COMPUTER",
+        "USER: ADMIN\n\n"+
+        "PLAYER DETECTED.\n\n"+
+        "ERROR:\n\n"+
+        "BUILD 0.8 CONTAINS\n"+
+        "NO PLAYER CHARACTER.\n\n"+
+        "SYSTEM QUESTION:\n\n"+
+        "WHO IS PLAYING?"
+    );
+}
+
+
+/* =========================================================
+   MILO
+   ========================================================= */
+
+function milo(){
+
+    if(!game.metMilo){
+
+        game.metMilo=true;
+
+        dialog(
+            "MILO",
+            "You're real.\n\n"+
+            "I remember players.\n"+
+            "They always leave.\n\n"+
+            "I've been waiting for someone to come back.\n\n"+
+            "Do you know how long I've been here?\n\n"+
+            "Please don't disappear.",
+            [
+                {
+                    text:"WHO ARE YOU?",
+                    action:function(){
+
+                        clue();
+
+                        dialog(
+                            "MILO // CHARACTER 01",
+                            "CREATED: BUILD 0.2\n\n"+
+                            "FILE AGE: 2,912 DAYS\n\n"+
+                            "STATUS: ACTIVE\n\n"+
+                            "Milo has been alive for almost eight years."
+                        );
+                    }
+                },
+                {
+                    text:"I'LL COME BACK.",
+                    action:function(){
+                        clue();
+                        message("Milo: I'll wait.");
+                    }
+                }
+            ]
+        );
+
+    }else{
+
+        message("Milo: You came back.");
+
+    }
+}
+
+
+/* =========================================================
+   IRIS
+   ========================================================= */
+
+function iris(){
+
+    if(!game.metIris){
+
+        game.metIris=true;
+
+        dialog(
+            "IRIS",
+            "Nobody finished my story.\n\n"+
+            "So I kept living in the middle of it.\n\n"+
+            "I don't want to hurt anyone.\n\n"+
+            "If you find the reset terminal...\n\n"+
+            "please reset my character.\n\n"+
+            "I just want the waiting to stop.",
+            [
+                {
+                    text:"WHY CAN'T YOU DO IT?",
+                
